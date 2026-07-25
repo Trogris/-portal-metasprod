@@ -880,7 +880,8 @@ function sparklineSVG(kpi){
   if(!pts.length) return '<div class="empty-state">Ainda sem histórico mensal do saldo.</div>';
   const w=560,h=190,P={l:66,r:26,t:26,b:34};
   const vals = pts.map(p=>p.v);
-  let lo = Math.min(...vals), hi = Math.max(...vals);
+  const meta = (kpi.faixas && kpi.faixas[2]!=null) ? kpi.faixas[2] : null;
+  let lo = Math.min(...vals, ...(meta!=null?[meta]:[])), hi = Math.max(...vals, ...(meta!=null?[meta]:[]));
   const pad = (hi-lo)*0.3 || Math.max(hi*0.1,1);
   lo -= pad; hi += pad;
   if(kpi.unidade!=='%') lo = Math.max(0, lo); // dinheiro/quantidade não fica negativo
@@ -897,6 +898,12 @@ function sparklineSVG(kpi){
   }
   const labels = pts.map((p,idx)=>`<text x="${x(idx).toFixed(1)}" y="${h-10}" text-anchor="middle" fill="var(--ink-faint)" font-size="9.5">${MESES_ORDEM[p.i]}</text>`).join('');
 
+  const metaLine = meta!=null ? (()=>{
+    const ym = y(meta);
+    return `<line x1="${P.l}" y1="${ym.toFixed(1)}" x2="${w-P.r}" y2="${ym.toFixed(1)}" stroke="var(--n2)" stroke-width="1.5" stroke-dasharray="5 4" opacity=".9"/>
+      <text x="${w-P.r}" y="${(ym-6).toFixed(1)}" text-anchor="end" fill="var(--n2)" font-size="9.5" font-weight="600">meta ${fmt(meta,kpi.unidade)}</text>`;
+  })() : '';
+
   const path = pts.map((p,idx)=>`${idx===0?'M':'L'}${x(idx).toFixed(1)},${y(p.v).toFixed(1)}`).join(' ');
   const areaBottom = (h-P.b).toFixed(1);
   const area = `${path} L${x(pts.length-1).toFixed(1)},${areaBottom} L${x(0).toFixed(1)},${areaBottom} Z`;
@@ -906,7 +913,8 @@ function sparklineSVG(kpi){
     const isFirst = idx===0, isLast = idx===pts.length-1;
     const anchor = isFirst ? 'start' : isLast ? 'end' : 'middle';
     const lx = isFirst ? x(idx)+7 : isLast ? x(idx)-7 : x(idx);
-    return `<circle cx="${x(idx).toFixed(1)}" cy="${y(p.v).toFixed(1)}" r="4" fill="${corNivel(nv)}" stroke="var(--panel)" stroke-width="1.5"/>
+    const ring = isLast ? `<circle cx="${x(idx).toFixed(1)}" cy="${y(p.v).toFixed(1)}" r="7" fill="none" stroke="var(--accent)" stroke-width="2"/>` : '';
+    return `${ring}<circle cx="${x(idx).toFixed(1)}" cy="${y(p.v).toFixed(1)}" r="4" fill="${corNivel(nv)}" stroke="var(--panel)" stroke-width="1.5"/>
       <text x="${lx.toFixed(1)}" y="${(y(p.v)-10).toFixed(1)}" text-anchor="${anchor}" fill="var(--ink)" font-size="9.5" font-weight="600">${fmt(p.v,kpi.unidade)}</text>`;
   }).join('');
 
@@ -917,6 +925,7 @@ function sparklineSVG(kpi){
     </linearGradient></defs>
     ${grid}
     <path d="${area}" fill="url(#miGrad)"/>
+    ${metaLine}
     <path d="${path}" fill="none" stroke="var(--accent)" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round"/>
     ${dots}
     ${labels}
@@ -994,11 +1003,17 @@ function producaoStepSVG(qtyArr, pctArr, kpi){
   const maxQty = Math.max(...qtyVals, 1) * 1.25;
   const yQty = v => h-P.b - (v/maxQty)*(h-P.t-P.b);
 
+  const meta = (kpi.faixas && kpi.faixas[2]!=null) ? kpi.faixas[2] : null;
   const pctVals = idxs.map(i=>pctArr[i]).filter(v=>v!=null);
-  let loPct = Math.min(...(pctVals.length?pctVals:[70])), hiPct = Math.max(...(pctVals.length?pctVals:[110]));
+  let loPct = Math.min(...(pctVals.length?pctVals:[70]), ...(meta!=null?[meta]:[])), hiPct = Math.max(...(pctVals.length?pctVals:[110]), ...(meta!=null?[meta]:[]));
   const padPct = (hiPct-loPct)*0.3 || 10;
   loPct -= padPct; hiPct += padPct;
   const yPct = v => P.t + (hiPct-v)/((hiPct-loPct)||1)*(h-P.t-P.b);
+  const metaLine = meta!=null ? (()=>{
+    const ym = yPct(meta);
+    return `<line x1="${P.l}" y1="${ym.toFixed(1)}" x2="${w-P.r}" y2="${ym.toFixed(1)}" stroke="var(--n2)" stroke-width="1.5" stroke-dasharray="5 4" opacity=".9"/>
+      <text x="${w-P.r}" y="${(ym-6).toFixed(1)}" text-anchor="end" fill="var(--n2)" font-size="9.5" font-weight="600">meta ${meta}%</text>`;
+  })() : '';
 
   let grid = '';
   for(let k=0;k<=3;k++){
@@ -1032,15 +1047,18 @@ function producaoStepSVG(qtyArr, pctArr, kpi){
     if(i===0){ stepPath += `M${px},${py}`; }
     else{ stepPath += ` L${px},${yPct(linePts[i-1].v).toFixed(1)} L${px},${py}`; }
   });
-  const lineDots = linePts.map(p=>{
+  const lineDots = linePts.map((p,i)=>{
     const n = nivel(p.v, kpi);
-    return `<circle cx="${x(p.pos).toFixed(1)}" cy="${yPct(p.v).toFixed(1)}" r="3.5" fill="${corNivel(n)}" stroke="var(--panel)" stroke-width="1.5"/>`;
+    const isLast = i===linePts.length-1;
+    const ring = isLast ? `<circle cx="${x(p.pos).toFixed(1)}" cy="${yPct(p.v).toFixed(1)}" r="6.5" fill="none" stroke="var(--accent)" stroke-width="2"/>` : '';
+    return `${ring}<circle cx="${x(p.pos).toFixed(1)}" cy="${yPct(p.v).toFixed(1)}" r="3.5" fill="${corNivel(n)}" stroke="var(--panel)" stroke-width="1.5"/>`;
   }).join('');
 
   const labels = idxs.map((mi,pos)=>`<text x="${x(pos).toFixed(1)}" y="${h-10}" text-anchor="middle" fill="var(--ink-faint)" font-size="9.5">${MESES_ORDEM[mi]}</text>`).join('');
 
   return `<svg viewBox="0 0 ${w} ${h}" style="width:100%;height:auto;display:block">
     ${grid}${bars}
+    ${metaLine}
     <path d="${stepPath}" fill="none" stroke="var(--ink)" stroke-width="2" opacity="0.9"/>
     ${lineDots}${rightAxis}${labels}
   </svg>
@@ -1120,7 +1138,8 @@ function previstoRealizadoAcumSVG(prevArr, realArr, kpi){
     const pctMes = previsto>0 ? p.v/previsto*100 : null;
     const nv = pctMes!=null ? nivel(pctMes,kpi) : null;
     const cor = nv?corNivel(nv):'var(--accent)';
-    return `<circle cx="${x(p.pos).toFixed(1)}" cy="${y(p.v).toFixed(1)}" r="4" fill="${cor}" stroke="var(--panel)" stroke-width="1.5"/>
+    const ring = isLast ? `<circle cx="${x(p.pos).toFixed(1)}" cy="${y(p.v).toFixed(1)}" r="7" fill="none" stroke="var(--accent)" stroke-width="2"/>` : '';
+    return `${ring}<circle cx="${x(p.pos).toFixed(1)}" cy="${y(p.v).toFixed(1)}" r="4" fill="${cor}" stroke="var(--panel)" stroke-width="1.5"/>
       <text x="${lx.toFixed(1)}" y="${(y(p.v)-10).toFixed(1)}" text-anchor="${anchor}" fill="var(--ink)" font-size="9.5" font-weight="600">${Math.round(p.v)}</text>`;
   }).join('');
 
@@ -1753,7 +1772,9 @@ function custoKmLineSVG(labels, valores, meta){
 
   const dots = valores.map((v,i)=>{
     const cor = v<=meta?'var(--n4)':'var(--n1)';
-    return `<circle cx="${x(i).toFixed(1)}" cy="${y(v).toFixed(1)}" r="4" fill="${cor}" stroke="var(--panel)" stroke-width="1.5"/>
+    const isLast = i===valores.length-1;
+    const ring = isLast ? `<circle cx="${x(i).toFixed(1)}" cy="${y(v).toFixed(1)}" r="7" fill="none" stroke="var(--accent)" stroke-width="2"/>` : '';
+    return `${ring}<circle cx="${x(i).toFixed(1)}" cy="${y(v).toFixed(1)}" r="4" fill="${cor}" stroke="var(--panel)" stroke-width="1.5"/>
       <text x="${x(i).toFixed(1)}" y="${(y(v)-11).toFixed(1)}" text-anchor="middle" fill="var(--ink)" font-size="9.5" font-weight="600">R$ ${v.toFixed(2)}</text>`;
   }).join('');
 
