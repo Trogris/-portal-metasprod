@@ -221,6 +221,14 @@
   .mi-panels-3{display:grid;grid-template-columns:1.2fr 1fr 1fr;gap:14px}
   @media(max-width:1100px){ .mi-panels-3{grid-template-columns:1fr} }
   .semaforo-bar{height:22px;border-radius:8px;overflow:hidden;background:var(--line-soft)}
+  .insight-card{
+    display:flex;gap:12px;align-items:flex-start;
+    background:linear-gradient(180deg,var(--panel-2),var(--panel));
+    border:1px solid var(--line);border-left:3px solid var(--bar,var(--accent));
+    border-radius:12px;padding:14px 16px;margin-bottom:16px;font-size:12.5px;color:var(--ink-dim);line-height:1.55;
+  }
+  .insight-card svg{width:18px;height:18px;color:var(--bar,var(--accent));flex-shrink:0;margin-top:1px}
+  .insight-card b{color:var(--ink)}
   .mi-kpi{
     background:linear-gradient(180deg,var(--panel-2),var(--panel));
     border:1px solid var(--line);border-radius:12px;padding:15px 16px;
@@ -240,12 +248,13 @@
   .panel:hover{border-color:var(--accent)}
   .panel.expanded{grid-column:1 / -1}
   .panel h3{
-    font-size:12px;font-weight:600;color:var(--ink-dim);margin-bottom:14px;
-    text-transform:uppercase;letter-spacing:.06em;display:flex;align-items:center;gap:8px;
+    font-size:13.5px;font-weight:700;color:var(--ink);margin-bottom:14px;
+    display:flex;align-items:center;gap:8px;letter-spacing:-.01em;
   }
-  .panel h3 svg{width:14px;height:14px;color:var(--accent);flex-shrink:0}
+  .panel h3 svg{width:15px;height:15px;color:var(--accent);flex-shrink:0}
   .panel h3 .expand-ic{width:13px;height:13px;color:var(--ink-faint);margin-left:auto;transition:transform .18s}
   .panel.expanded h3 .expand-ic{transform:rotate(180deg)}
+  .panel svg[viewBox]:not(.expand-ic):not([viewBox="0 0 24 24"]){max-height:220px}
   .panel.expanded .bars-mes{height:300px}
   .panel.expanded .donut,.panel.expanded .donut::after{transition:.15s}
   .panel.expanded .donut{width:190px;height:190px}
@@ -778,7 +787,12 @@ function viewArea(area){
    --------------------------------------------------------------------- */
 const EXPAND_IC = '<svg class="expand-ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>';
 function togglePanel(el){
-  el.classList.toggle('expanded');
+  const expanded = el.classList.toggle('expanded');
+  el.querySelectorAll('svg[viewBox]').forEach(svg=>{
+    const vb = svg.getAttribute('viewBox');
+    if(vb==='0 0 24 24') return; // ícones pequenos (título, chevron) não mexem
+    svg.style.maxHeight = expanded ? '420px' : '220px';
+  });
 }
 function fmtGrande(v){
   if(v==null) return '–';
@@ -1116,6 +1130,18 @@ function viewProducao(grp){
     });
   }
 }
+function insightProducaoHTML(d, kpi){
+  const pior = d.rankingProjetos && d.rankingProjetos[0];
+  if(!pior) return '';
+  const n = nivel(pior.pct, kpi);
+  if(n==='n3' || n==='n4' || !n) return '';
+  const nGeral = nivel(kpi.atual, kpi);
+  const peso = d.totalPrevisto>0 ? (pior.previsto/d.totalPrevisto*100) : null;
+  return `<div class="insight-card" style="--bar:${corNivel(n)}">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><path d="M12 9v4M12 17h.01"/></svg>
+    <div><b>${pior.nome}</b> está com apenas <b style="color:${corNivel(n)}">${pior.pct.toFixed(0)}%</b> de aderência${peso!=null?` e responde por <b>${peso.toFixed(0)}%</b> de todo o previsto da rede`:''} — é o principal responsável por puxar a Aderência geral para <b style="color:${nGeral?corNivel(nGeral):'var(--ink)'}">${nGeral?nGeral.toUpperCase():fmt(kpi.atual,kpi.unidade)}</b>.</div>
+  </div>`;
+}
 function producaoDashboardHTML(kpi, d){
   const n = nivel(kpi.atual, kpi);
   const mesesComDado = d.producaoMensal.filter(v=>v!=null);
@@ -1145,6 +1171,7 @@ function producaoDashboardHTML(kpi, d){
           <div class="val">${c.val}${c.badge?` <span class="tier-badge" style="background:${corNivel(c.badge)}">${c.badge.toUpperCase()}</span>`:''}</div>
         </div>`).join("")}
     </div>
+    ${insightProducaoHTML(d, kpi)}
     <div class="panel" onclick="togglePanel(this)">
       <h3><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 3v18h18"/><rect x="7" y="10" width="3" height="8"/><rect x="12" y="6" width="3" height="12"/><rect x="17" y="13" width="3" height="5"/></svg>Equipamentos produzidos vs. Aderência à Programação${EXPAND_IC}</h3>
       ${producaoStepSVG(d.producaoMensal, kpi.meses, kpi)}
