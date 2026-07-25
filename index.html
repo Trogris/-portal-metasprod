@@ -1,0 +1,301 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Portal de Metas — Fiscaltech 2026</title>
+<script>
+  // Mesmo padrão do Cronograma: define o tema antes do CSS pintar, pra não
+  // dar aquele flash de um tema errado no F5. Padrão é escuro.
+  document.documentElement.setAttribute('data-theme', localStorage.getItem('pm_theme') || 'dark');
+</script>
+<style>
+  :root {
+    --bg: #0f1117; --surface: #181c27; --surface2: #1e2333; --border: #2a3048;
+    --accent: #3b82f6; --accent-dim: #1e3a5f;
+    --text: #e2e8f0; --text-muted: #64748b; --text-dim: #94a3b8;
+    --green: #22c55e; --amber: #f59e0b; --red: #ef4444;
+  }
+  :root[data-theme="light"] {
+    --bg:#eef1f7; --surface:#ffffff; --surface2:#e4e9f2; --border:#b9c3d6;
+    --accent:#2f5fd0; --accent-dim:#dbe5fa;
+    --text:#12151e; --text-muted:#5a6478; --text-dim:#333c4d;
+    --green:#15803d; --amber:#a3450a; --red:#c81e1e;
+  }
+  * { box-sizing:border-box; margin:0; padding:0; }
+  body { background:var(--bg); color:var(--text); font-family:'Inter','Segoe UI',system-ui,sans-serif; font-size:13px; min-height:100vh; }
+
+  header { background:var(--surface); border-bottom:1px solid var(--border); padding:16px 24px; display:flex; align-items:center; justify-content:space-between; position:sticky; top:0; z-index:50; flex-wrap:wrap; gap:12px; }
+  header h1 { font-size:17px; font-weight:800; letter-spacing:.3px; }
+  header .meta { font-size:11.5px; color:var(--text-muted); margin-top:3px; }
+  .badge { display:inline-block; background:var(--accent-dim); color:var(--accent); font-weight:700; padding:1px 8px; border-radius:10px; font-size:11px; }
+
+  .theme-toggle { background:var(--surface2); border:1px solid var(--border); border-radius:8px; width:32px; height:32px; display:flex; align-items:center; justify-content:center; cursor:pointer; color:var(--text-dim); }
+  .theme-toggle:hover { border-color:var(--accent); color:var(--accent); }
+  .theme-toggle svg { width:16px; height:16px; }
+  :root[data-theme="light"] .theme-toggle .icon-moon,
+  :root:not([data-theme="light"]) .theme-toggle .icon-sun { display:none; }
+
+  main { max-width:1180px; margin:0 auto; padding:28px 20px 60px; }
+  .section-title { font-size:11px; font-weight:700; letter-spacing:.8px; text-transform:uppercase; color:var(--text-muted); margin:28px 0 12px; }
+  .section-title:first-child { margin-top:0; }
+
+  .cards-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(250px,1fr)); gap:14px; }
+
+  .meta-card { background:var(--surface); border:1px solid var(--border); border-radius:12px; padding:16px 18px; display:flex; flex-direction:column; gap:8px; position:relative; overflow:hidden; transition:border-color .15s; }
+  .meta-card.linked { cursor:pointer; }
+  .meta-card.linked:hover { border-color:var(--accent); }
+  .meta-card-accent { position:absolute; top:0; left:0; width:100%; height:3px; }
+  .meta-setor { font-size:10px; font-weight:700; letter-spacing:.5px; text-transform:uppercase; color:var(--text-muted); }
+  .meta-nome { font-size:14px; font-weight:700; line-height:1.3; min-height:36px; }
+  .meta-valor-row { display:flex; align-items:baseline; gap:8px; margin-top:2px; }
+  .meta-valor { font-size:26px; font-weight:800; letter-spacing:-.5px; }
+  .meta-tier { display:inline-block; font-size:10px; font-weight:800; padding:2px 8px; border-radius:10px; color:#fff; }
+  .meta-sub { font-size:11px; color:var(--text-muted); }
+  .meta-pending { font-size:12px; color:var(--text-muted); font-style:italic; padding:6px 0; }
+  .meta-link { margin-top:auto; padding-top:8px; font-size:11px; color:var(--accent); font-weight:600; display:flex; align-items:center; gap:4px; }
+  .meta-link svg { width:12px; height:12px; }
+
+  .n1 { color:var(--red); } .n1-bg { background:var(--red); }
+  .n2 { color:var(--amber); } .n2-bg { background:var(--amber); }
+  .n3 { color:var(--green); } .n3-bg { background:var(--green); }
+  .n4 { color:var(--green); } .n4-bg { background:var(--green); }
+
+  .legend { display:flex; gap:16px; flex-wrap:wrap; margin-top:20px; padding:12px 16px; background:var(--surface); border:1px solid var(--border); border-radius:10px; font-size:11px; color:var(--text-dim); }
+  .legend-chip { display:flex; align-items:center; gap:6px; }
+  .legend-dot { width:9px; height:9px; border-radius:3px; }
+
+  .foot-note { margin-top:24px; font-size:11px; color:var(--text-muted); line-height:1.6; }
+
+  @media (max-width:640px) {
+    header { padding:12px 16px; }
+    main { padding:20px 14px 40px; }
+    .cards-grid { grid-template-columns:1fr 1fr; gap:10px; }
+    .meta-valor { font-size:21px; }
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div>
+    <h1>PORTAL DE METAS — FISCALTECH 2026</h1>
+    <div class="meta" id="header-meta">Carregando…</div>
+  </div>
+  <button class="theme-toggle" id="btn-theme" title="Alternar tema claro/escuro" onclick="toggleTheme()">
+    <svg class="icon-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg>
+    <svg class="icon-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/></svg>
+  </button>
+</header>
+
+<main>
+  <div class="section-title">Visão geral — Matriz de Metas 2026</div>
+  <div class="cards-grid" id="cards-grid"></div>
+
+  <div class="legend" id="legend"></div>
+
+  <div class="foot-note">
+    Cada card mostra o valor mais recente e o nível (N1–N4) definido na Matriz de Metas. Metas ainda sem fonte de dados conectada aparecem como "aguardando conexão" — assim que a planilha de origem for ligada, o card passa a atualizar sozinho.
+  </div>
+</main>
+
+<script>
+// ── TEMA ──
+function applyTheme(theme) {
+  if (theme) document.documentElement.setAttribute('data-theme', theme);
+  else document.documentElement.removeAttribute('data-theme');
+}
+function toggleTheme() {
+  const current = document.documentElement.getAttribute('data-theme') || 'dark';
+  const next = current === 'dark' ? 'light' : 'dark';
+  applyTheme(next);
+  localStorage.setItem('pm_theme', next);
+}
+
+// ── MATRIZ DE METAS 2026 ──
+// N1-N4 conforme "Matriz de Metas 2026". "tipo" define se a meta é
+// "quanto maior melhor" (asc) ou "quanto menor melhor" (desc), pra
+// classificar corretamente o nível a partir de um valor numérico.
+const METAS = [
+  {
+    id: 'aderencia-programacao',
+    nome: 'Aderência à Programação',
+    setor: 'Produção',
+    unidade: '%',
+    tipo: 'asc',
+    faixas: [87, 92, 97], // < N1 | N2 | N3 | >= N4
+    link: 'https://cronograma-producao-psi.vercel.app/',
+    fonteAutomatica: true,
+  },
+  {
+    id: 'estoque-manutencao',
+    nome: 'Estoque Manutenção (R$)',
+    setor: 'MI',
+    unidade: 'R$',
+    tipo: 'desc',
+    faixas: [200000, 250000, 300000], // <N4 | N3 | N2 | >N1 (desc: menor é melhor)
+    link: null,
+    fonteAutomatica: false,
+  },
+  {
+    id: 'acuracidade-estoque',
+    nome: 'Acuracidade do Estoque',
+    setor: 'Estoque Matriz / Filiais',
+    unidade: '%',
+    tipo: 'asc',
+    faixas: [94, 97, 98.5],
+    link: null,
+    fonteAutomatica: false,
+  },
+  {
+    id: 'ruptura-estoque',
+    nome: 'Ruptura de Estoque (itens críticos)',
+    setor: 'Estoque Matriz / Filiais',
+    unidade: '%',
+    tipo: 'desc',
+    faixas: [2, 3, 5],
+    link: null,
+    fonteAutomatica: false,
+  },
+  {
+    id: 'sla-atendimento',
+    nome: 'SLA de Atendimento',
+    setor: 'Logística',
+    unidade: '%',
+    tipo: 'asc',
+    faixas: [85, 92, 95],
+    link: null,
+    fonteAutomatica: false,
+    apenasIndicador: true,
+  },
+];
+
+function classificarNivel(valor, meta) {
+  const [a, b, c] = meta.faixas;
+  if (meta.tipo === 'asc') {
+    if (valor < a) return 'N1';
+    if (valor < b) return 'N2';
+    if (valor < c) return 'N3';
+    return 'N4';
+  } else {
+    if (valor > c) return 'N1';
+    if (valor > b) return 'N2';
+    if (valor > a) return 'N3';
+    return 'N4';
+  }
+}
+function fmtValor(valor, unidade) {
+  if (valor === null || valor === undefined) return '—';
+  if (unidade === '%') return `${valor.toFixed(1)}%`;
+  if (unidade === 'R$') return `R$ ${(valor/1000).toLocaleString('pt-BR',{maximumFractionDigits:0})}k`;
+  return String(valor);
+}
+
+// ── ADERÊNCIA À PROGRAMAÇÃO — fonte automática (planilha oficial FM.PRD.001) ──
+// Mesmo Apps Script de leitura já configurado pro Cronograma de Produção.
+const SOURCE_WEBAPP_URL = 'https://script.google.com/macros/s/AKfycbzOktWtAdQ0Vg_tnqU2-WhgyMnX8J6ZL-Bq9GkDQxj-XQerBWK4qGiNkzv88sRLpvdV_g/exec';
+const SEMANAS = Array.from({length:52}, (_,i) => 'S' + String(i+1).padStart(2,'0'));
+
+// Semana atual calculada a partir da data de hoje (S01 começa 05/01/2026) —
+// assim não precisa atualizar isso à mão toda semana.
+function semanaAtualNum() {
+  const inicio = new Date(2026, 0, 5); // 05/01/2026, início da S01
+  const hoje = new Date();
+  const dias = Math.floor((hoje - inicio) / 86400000);
+  const n = Math.floor(dias / 7) + 1;
+  return Math.min(52, Math.max(1, n));
+}
+
+function somarMetricas(...objs) {
+  const out = {};
+  objs.forEach(obj => Object.entries(obj||{}).forEach(([k,v]) => { if (v) out[k] = (out[k]||0) + v; }));
+  return out;
+}
+function combinarPrevisto(metrics) {
+  return somarMetricas(metrics['Prev'], metrics['Reprogramado'], metrics['Reprog.'], metrics['Reprog'], metrics['Não Prog.']);
+}
+function combinarReal(metrics) {
+  return somarMetricas(metrics['Real']);
+}
+
+async function calcularAderenciaPrograma() {
+  const res = await fetch(SOURCE_WEBAPP_URL + '?t=' + Date.now());
+  if (!res.ok) throw new Error('HTTP ' + res.status);
+  const data = await res.json();
+  const projetos = (data.projects || []).map(p => ({
+    prod: combinarPrevisto(p.metrics || {}),
+    real: combinarReal(p.metrics || {}),
+  }));
+
+  const prevAno = {}, realAno = {};
+  projetos.forEach(p => {
+    Object.entries(p.prod).forEach(([s,v]) => { prevAno[s] = (prevAno[s]||0) + v; });
+    Object.entries(p.real).forEach(([s,v]) => { realAno[s] = (realAno[s]||0) + v; });
+  });
+
+  const cutoff = semanaAtualNum() - 1; // última semana já concluída
+  let accPrev = 0, accReal = 0;
+  const semanais = [];
+  SEMANAS.forEach(s => {
+    accPrev += (prevAno[s]||0);
+    accReal += (realAno[s]||0);
+    const n = parseInt(s.slice(1),10);
+    if (n <= cutoff && accPrev > 0) semanais.push(accReal/accPrev*100);
+  });
+  const media = semanais.length ? semanais.reduce((a,b)=>a+b,0)/semanais.length : null;
+  return { valor: media, cutoff };
+}
+
+// ── RENDER ──
+function tierClass(nivel) { return nivel.toLowerCase(); }
+
+function renderCard(meta, valor, sub) {
+  const nivel = valor !== null && valor !== undefined ? classificarNivel(valor, meta) : null;
+  const cls = nivel ? tierClass(nivel) : '';
+  const linkHtml = meta.link
+    ? `<div class="meta-link">Abrir painel completo <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="7" y1="17" x2="17" y2="7"/><polyline points="7 7 17 7 17 17"/></svg></div>`
+    : '';
+  const corpo = valor !== null && valor !== undefined
+    ? `<div class="meta-valor-row">
+         <span class="meta-valor ${cls}">${fmtValor(valor, meta.unidade)}</span>
+         <span class="meta-tier ${cls}-bg">${nivel}</span>
+       </div>
+       <div class="meta-sub">${sub||''}</div>`
+    : `<div class="meta-pending">${meta.apenasIndicador ? 'Apenas indicador — sem meta de nível' : 'Aguardando conexão de dados'}</div>`;
+
+  return `<div class="meta-card ${meta.link?'linked':''}" ${meta.link?`onclick="window.open('${meta.link}','_blank')"`:''}>
+    <div class="meta-card-accent ${cls?cls+'-bg':''}" style="${cls?'':'background:var(--border)'}"></div>
+    <div class="meta-setor">${meta.setor}</div>
+    <div class="meta-nome">${meta.nome}</div>
+    ${corpo}
+    ${linkHtml}
+  </div>`;
+}
+
+async function renderTudo() {
+  const grid = document.getElementById('cards-grid');
+  grid.innerHTML = METAS.map(m => renderCard(m, null, '')).join('');
+
+  document.getElementById('legend').innerHTML = [
+    ['N1','var(--red)'], ['N2','var(--amber)'], ['N3','var(--green)'], ['N4','var(--green)']
+  ].map(([n,c]) => `<span class="legend-chip"><span class="legend-dot" style="background:${c}"></span>${n}</span>`).join('')
+    + `<span class="legend-chip" style="margin-left:auto">Faixas conforme a Matriz de Metas 2026 de cada indicador</span>`;
+
+  const cutoff = semanaAtualNum() - 1;
+  document.getElementById('header-meta').innerHTML = `Semana atual: <span class="badge">S${String(semanaAtualNum()).padStart(2,'0')}</span> · dados até S${String(cutoff).padStart(2,'0')}`;
+
+  try {
+    const { valor, cutoff } = await calcularAderenciaPrograma();
+    const meta = METAS[0];
+    const idx = METAS.indexOf(meta);
+    const cards = grid.children;
+    cards[idx].outerHTML = renderCard(meta, valor, `acumulado até S${String(cutoff).padStart(2,'0')}`);
+  } catch (e) {
+    console.error('Erro ao buscar Aderência à Programação:', e);
+  }
+}
+
+renderTudo();
+</script>
+</body>
+</html>
