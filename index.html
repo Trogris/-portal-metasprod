@@ -209,21 +209,33 @@
   .mi-kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px;margin-bottom:16px}
   .mi-kpi{
     background:linear-gradient(180deg,var(--panel-2),var(--panel));
-    border:1px solid var(--line);border-radius:12px;padding:14px 16px;
+    border:1px solid var(--line);border-radius:12px;padding:15px 16px;
+    position:relative;overflow:hidden;
   }
-  .mi-kpi .lbl{font-size:11px;color:var(--ink-dim)}
-  .mi-kpi .val{font-size:22px;font-weight:700;margin-top:8px;letter-spacing:-.02em;display:flex;align-items:center;gap:7px}
+  .mi-kpi::before{content:"";position:absolute;left:0;top:0;bottom:0;width:3px;background:var(--bar,var(--accent))}
+  .mi-kpi .lbl{font-size:11px;color:var(--ink-dim);display:flex;align-items:center;gap:7px}
+  .mi-kpi .lbl svg{width:14px;height:14px;color:var(--bar,var(--accent));flex-shrink:0}
+  .mi-kpi .val{font-size:23px;font-weight:700;margin-top:9px;letter-spacing:-.02em;display:flex;align-items:center;gap:7px;font-variant-numeric:tabular-nums}
   .mi-panels{display:grid;grid-template-columns:1.3fr 1fr;gap:14px;margin-bottom:14px}
   .mi-panels-2{display:grid;grid-template-columns:1.3fr 1fr;gap:14px}
   @media(max-width:900px){ .mi-panels,.mi-panels-2{grid-template-columns:1fr} }
   .panel{
     background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:18px 20px;
   }
-  .panel h3{font-size:12.5px;font-weight:700;color:var(--ink-dim);margin-bottom:14px;text-transform:uppercase;letter-spacing:.04em}
+  .panel h3{
+    font-size:12px;font-weight:600;color:var(--ink-dim);margin-bottom:14px;
+    text-transform:uppercase;letter-spacing:.06em;display:flex;align-items:center;gap:8px;
+  }
+  .panel h3 svg{width:14px;height:14px;color:var(--accent);flex-shrink:0}
 
   .donut-wrap{display:flex;align-items:center;gap:22px;flex-wrap:wrap;justify-content:center}
-  .donut{width:130px;height:130px;border-radius:50%;flex-shrink:0;position:relative}
+  .donut{width:140px;height:140px;border-radius:50%;flex-shrink:0;position:relative}
   .donut::after{content:"";position:absolute;inset:24%;border-radius:50%;background:var(--panel)}
+  .donut .d-center{
+    position:absolute;inset:24%;display:grid;place-items:center;text-align:center;
+  }
+  .donut .d-center b{font-size:19px;font-weight:700;display:block;line-height:1.1;letter-spacing:-.02em}
+  .donut .d-center span{font-size:9.5px;color:var(--ink-faint);text-transform:uppercase;letter-spacing:.04em}
   .donut-legend{display:flex;flex-direction:column;gap:8px}
   .donut-legend .lg{display:flex;align-items:center;gap:8px;font-size:12px;color:var(--ink)}
   .donut-legend .sw{width:11px;height:11px;border-radius:3px;flex-shrink:0}
@@ -232,21 +244,22 @@
   .bars-mes{display:flex;align-items:flex-end;gap:10px;height:180px;overflow-x:auto;padding-top:8px}
   .bars-mes .col{display:flex;flex-direction:column;align-items:center;justify-content:flex-end;height:100%;min-width:34px;flex-shrink:0}
   .bars-mes .pair{display:flex;align-items:flex-end;gap:3px;height:100%}
-  .bars-mes .bar{width:11px;border-radius:3px 3px 0 0}
-  .bars-mes .bar.rec{background:var(--accent)}
-  .bars-mes .bar.suc{background:transparent;border:1.5px solid var(--accent);opacity:.55}
+  .bars-mes .bar{width:11px;border-radius:4px 4px 0 0;transition:opacity .15s}
+  .bars-mes .bar.rec{background:linear-gradient(180deg, color-mix(in srgb, var(--accent) 85%, white 15%), var(--accent) 55%, color-mix(in srgb, var(--accent) 70%, black 15%))}
+  .bars-mes .bar.suc{background:linear-gradient(180deg, color-mix(in srgb, var(--n2) 85%, white 15%), var(--n2) 55%, color-mix(in srgb, var(--n2) 70%, black 15%));opacity:.85}
+  .bars-mes .col:hover .bar{opacity:.75}
   .bars-mes .mlabel{font-size:9.5px;color:var(--ink-faint);margin-top:6px;white-space:nowrap}
   .bars-legend{display:flex;gap:16px;margin-top:12px;font-size:11px;color:var(--ink-dim)}
   .bars-legend .lg{display:flex;align-items:center;gap:6px}
   .bars-legend .sw{width:11px;height:11px;border-radius:3px}
-  .bars-legend .sw.suc{background:transparent;border:1.5px solid var(--accent)}
+  .bars-legend .sw.suc{background:var(--n2)}
   .bars-legend .sw.rec{background:var(--accent)}
 
   .funnel{display:flex;flex-direction:column;gap:10px}
   .funnel .row{display:flex;align-items:center;gap:10px}
   .funnel .flabel{width:120px;font-size:11.5px;color:var(--ink-dim);flex-shrink:0}
   .funnel .ftrack{flex:1;background:var(--panel-2);border-radius:5px;height:20px;overflow:hidden}
-  .funnel .ffill{height:100%;background:var(--accent);border-radius:5px}
+  .funnel .ffill{height:100%;border-radius:5px;background:linear-gradient(90deg, color-mix(in srgb, var(--accent) 70%, black 10%), var(--accent))}
   .funnel .fval{width:60px;text-align:right;font-size:12px;font-weight:700;flex-shrink:0}
 
   .mi-loading{padding:40px 0;text-align:center;color:var(--ink-faint);font-size:13px}
@@ -586,7 +599,9 @@ function donutHTML(nRec,nSuc,nEnv){
   const pRec = nRec/total*100, pSuc = nSuc/total*100, pEnv = nEnv/total*100;
   const c1 = pRec, c2 = c1+pSuc;
   return `<div class="donut-wrap">
-    <div class="donut" style="background:conic-gradient(var(--accent) 0% ${c1}%, var(--n2) ${c1}% ${c2}%, var(--ink-faint) ${c2}% 100%)"></div>
+    <div class="donut" style="background:conic-gradient(var(--accent) 0% ${c1}%, var(--n2) ${c1}% ${c2}%, var(--ink-faint) ${c2}% 100%)">
+      <div class="d-center"><b>${(nRec+nSuc+nEnv).toLocaleString('pt-BR')}</b><span>peças</span></div>
+    </div>
     <div class="donut-legend">
       <div class="lg"><span class="sw" style="background:var(--accent)"></span>Peças Reparadas<span class="pct">${pRec.toFixed(0)}%</span></div>
       <div class="lg"><span class="sw" style="background:var(--n2)"></span>Peças Sucateadas<span class="pct">${pSuc.toFixed(0)}%</span></div>
@@ -625,39 +640,78 @@ function funnelHTML(total,nRec,nSuc,nEnv){
       <div class="fval">${r.val.toLocaleString('pt-BR')}</div>
     </div>`).join("")}</div>`;
 }
-function sparklineSVG(meses){
-  const pts = meses.map((v,i)=>({i,v})).filter(p=>p.v!=null);
+function sparklineSVG(kpi){
+  const pts = kpi.meses.map((v,i)=>({i,v})).filter(p=>p.v!=null);
   if(!pts.length) return '<div class="empty-state">Ainda sem histórico mensal do saldo.</div>';
-  const w=560,h=160,pad=28;
-  const max = Math.max(...pts.map(p=>p.v))*1.15 || 1;
-  const x = i => pad + (i/11)*(w-2*pad);
-  const y = v => h-pad - (v/max)*(h-2*pad-14);
+  const w=560,h=190,P={l:56,r:20,t:26,b:34};
+  const vals = pts.map(p=>p.v);
+  let lo = Math.min(0,...vals), hi = Math.max(...vals);
+  hi += (hi-lo)*0.18 || 1;
+  const x = i => P.l + (i/11)*(w-P.l-P.r);
+  const y = v => P.t + (hi-v)/((hi-lo)||1)*(h-P.t-P.b);
+
+  let grid = '';
+  for(let k=0;k<=3;k++){
+    const v = lo + (hi-lo)*k/3;
+    const yy = y(v);
+    grid += `<line x1="${P.l}" y1="${yy.toFixed(1)}" x2="${w-P.r}" y2="${yy.toFixed(1)}" stroke="var(--line-soft)" stroke-width="1"/>`;
+    grid += `<text x="${P.l-8}" y="${(yy+3.5).toFixed(1)}" text-anchor="end" fill="var(--ink-faint)" font-size="9.5">${fmt(v,kpi.unidade)}</text>`;
+  }
+  const labels = MESES_ORDEM.map((m,i)=>`<text x="${x(i).toFixed(1)}" y="${h-10}" text-anchor="middle" fill="var(--ink-faint)" font-size="9.5">${m}</text>`).join('');
+
   const path = pts.map((p,idx)=>`${idx===0?'M':'L'}${x(p.i).toFixed(1)},${y(p.v).toFixed(1)}`).join(' ');
-  const dots = pts.map(p=>`<circle cx="${x(p.i).toFixed(1)}" cy="${y(p.v).toFixed(1)}" r="3.5" fill="var(--accent)"/>`).join('');
-  const labels = MESES_ORDEM.map((m,i)=>`<text x="${x(i).toFixed(1)}" y="${h-6}" font-size="9.5" fill="var(--ink-faint)" text-anchor="middle">${m}</text>`).join('');
-  return `<svg viewBox="0 0 ${w} ${h}" style="width:100%;height:auto;max-height:180px">
+  const areaBottom = (h-P.b).toFixed(1);
+  const area = `${path} L${x(pts[pts.length-1].i).toFixed(1)},${areaBottom} L${x(pts[0].i).toFixed(1)},${areaBottom} Z`;
+
+  const dots = pts.map(p=>{
+    const nv = nivel(p.v,kpi);
+    return `<circle cx="${x(p.i).toFixed(1)}" cy="${y(p.v).toFixed(1)}" r="4" fill="${corNivel(nv)}" stroke="var(--panel)" stroke-width="1.5"/>
+      <text x="${x(p.i).toFixed(1)}" y="${(y(p.v)-10).toFixed(1)}" text-anchor="middle" fill="var(--ink)" font-size="9.5" font-weight="600">${fmt(p.v,kpi.unidade)}</text>`;
+  }).join('');
+
+  return `<svg viewBox="0 0 ${w} ${h}" style="width:100%;height:auto;max-height:210px">
+    <defs><linearGradient id="miGrad" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="var(--accent)" stop-opacity=".32"/>
+      <stop offset="1" stop-color="var(--accent)" stop-opacity="0"/>
+    </linearGradient></defs>
+    ${grid}
+    <path d="${area}" fill="url(#miGrad)"/>
     <path d="${path}" fill="none" stroke="var(--accent)" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round"/>
-    ${dots}${labels}
+    ${dots}
+    ${labels}
   </svg>`;
 }
 function miDashboardHTML(grp, d){
   const kpiEstoque = grp.kpis[0];
   const n = nivel(kpiEstoque.atual, kpiEstoque);
+  const corRecup = d.indiceRecuperacao!=null && d.indiceRecuperacao>=75 ? 'var(--n4)' : d.indiceRecuperacao>=60 ? 'var(--n2)' : 'var(--n1)';
+  const kpiCards = [
+    { lbl:'Peças avaliadas', val: d.totalPecas.toLocaleString('pt-BR'), cor:'var(--accent)',
+      icon:'<path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/>' },
+    { lbl:'Índice de Recuperação (R$)', val: d.indiceRecuperacao!=null?d.indiceRecuperacao.toFixed(0)+'%':'–', cor:corRecup,
+      icon:'<path d="M3 3v18h18"/><path d="m19 9-5 5-4-4-3 3"/>' },
+    { lbl:'Valor Recuperado', val: fmtGrande(d.totRec), cor:'var(--n4)',
+      icon:'<path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/>' },
+    { lbl:'Valor Sucateado', val: fmtGrande(d.totSuc), cor:'var(--n2)',
+      icon:'<path d="M3 6h18M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2m3 0-1 14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2L4 6"/>' },
+    { lbl:'Saldo Armazém MI', val: fmt(kpiEstoque.atual,'R$'), badge: n, cor: n?corNivel(n):'var(--accent)',
+      icon:'<path d="M21 8V5a1 1 0 0 0-.5-.87l-7.5-4.3a2 2 0 0 0-2 0L3.5 4.13A1 1 0 0 0 3 5v14a1 1 0 0 0 .5.87l7.5 4.3a2 2 0 0 0 2 0"/><path d="M3.3 7 12 12l8.7-5M12 22V12"/>' },
+  ];
   return `
     <div class="mi-kpis">
-      <div class="mi-kpi"><div class="lbl">Peças avaliadas</div><div class="val">${d.totalPecas.toLocaleString('pt-BR')}</div></div>
-      <div class="mi-kpi"><div class="lbl">Índice de Recuperação (R$)</div><div class="val">${d.indiceRecuperacao!=null?d.indiceRecuperacao.toFixed(0)+'%':'–'}</div></div>
-      <div class="mi-kpi"><div class="lbl">Valor Recuperado</div><div class="val">${fmtGrande(d.totRec)}</div></div>
-      <div class="mi-kpi"><div class="lbl">Valor Sucateado</div><div class="val">${fmtGrande(d.totSuc)}</div></div>
-      <div class="mi-kpi"><div class="lbl">Saldo Armazém MI</div><div class="val">${fmt(kpiEstoque.atual,'R$')}${n?` <span class="tier-badge" style="background:${corNivel(n)}">${n.toUpperCase()}</span>`:''}</div></div>
+      ${kpiCards.map(c=>`
+        <div class="mi-kpi" style="--bar:${c.cor}">
+          <div class="lbl"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${c.icon}</svg>${c.lbl}</div>
+          <div class="val">${c.val}${c.badge?` <span class="tier-badge" style="background:${corNivel(c.badge)}">${c.badge.toUpperCase()}</span>`:''}</div>
+        </div>`).join("")}
     </div>
     <div class="mi-panels">
-      <div class="panel"><h3>Saldo Armazém MI (R$) — mês a mês, 2026</h3>${sparklineSVG(kpiEstoque.meses)}</div>
-      <div class="panel"><h3>Destinação das peças</h3>${donutHTML(d.nRec,d.nSuc,d.nEnv)}</div>
+      <div class="panel"><h3><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 3v18h18"/><path d="m19 9-5 5-4-4-3 3"/></svg>Saldo Armazém MI (R$) — mês a mês, 2026</h3>${sparklineSVG(kpiEstoque)}</div>
+      <div class="panel"><h3><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21.2 15.9A10 10 0 1 1 8 2.8"/><path d="M22 12A10 10 0 0 0 12 2v10z"/></svg>Destinação das peças</h3>${donutHTML(d.nRec,d.nSuc,d.nEnv)}</div>
     </div>
     <div class="mi-panels-2">
-      <div class="panel"><h3>Peças recuperadas vs sucateadas (R$) — 2026</h3>${barsMesHTML(d.serieMensal)}</div>
-      <div class="panel"><h3>Peças avaliadas por categoria</h3>${funnelHTML(d.totalPecas,d.nRec,d.nSuc,d.nEnv)}</div>
+      <div class="panel"><h3><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 3v18h18"/><rect x="7" y="10" width="3" height="8"/><rect x="12" y="6" width="3" height="12"/><rect x="17" y="13" width="3" height="5"/></svg>Peças recuperadas vs sucateadas (R$) — 2026</h3>${barsMesHTML(d.serieMensal)}</div>
+      <div class="panel"><h3><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 21H4a1 1 0 0 1-1-1V3"/><path d="m5 15 4-4 3 3 5-6"/></svg>Peças avaliadas por categoria</h3>${funnelHTML(d.totalPecas,d.nRec,d.nSuc,d.nEnv)}</div>
     </div>
     <div class="foot-note">Dados calculados ao vivo a partir das abas mensais da planilha "Custos - Manutenção Interna 2026" (peça a peça + saldo do armazém). <a href="${MI_SHEET_URL}" target="_blank" style="color:var(--accent)">Abrir planilha completa ↗</a></div>
   `;
