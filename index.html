@@ -218,6 +218,9 @@
 
   /* ---------- Dashboard de Manutenção Interna ---------- */
   .mi-kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px;margin-bottom:16px}
+  .mi-panels-3{display:grid;grid-template-columns:1.2fr 1fr 1fr;gap:14px}
+  @media(max-width:1100px){ .mi-panels-3{grid-template-columns:1fr} }
+  .semaforo-bar{height:22px;border-radius:8px;overflow:hidden;background:var(--line-soft)}
   .mi-kpi{
     background:linear-gradient(180deg,var(--panel-2),var(--panel));
     border:1px solid var(--line);border-radius:12px;padding:15px 16px;
@@ -478,7 +481,18 @@ async function calcularAderenciaPrograma(){
   });
 
   const cutoff = semanaAtualNum()-1; // última semana já concluída
+
+  const rankingProjetos = (data.projects||[]).map(p=>{
+    const prod = combinarPrevisto(p.metrics||{});
+    const real = combinarReal(p.metrics||{});
+    let prev=0, rea=0;
+    Object.entries(prod).forEach(([s,v])=>{ if(parseInt(s.slice(1),10)<=cutoff) prev+=v; });
+    Object.entries(real).forEach(([s,v])=>{ if(parseInt(s.slice(1),10)<=cutoff) rea+=v; });
+    return { nome:p.nome, previsto:prev, real:rea, pct: prev>0 ? rea/prev*100 : null };
+  }).filter(p=>p.previsto>0).sort((a,b)=>a.pct-b.pct);
+
   let accPrev=0, accReal=0, totalProduzido=0, totalPrevisto=0;
+  let picoSemana=null, picoValor=-1;
   const porMes = {};
   const porMesProd = {};
   const porMesPrev = {};
@@ -493,6 +507,7 @@ async function calcularAderenciaPrograma(){
     const mes = WEEK_MONTH[s];
     totalProduzido += (realAno[s]||0);
     totalPrevisto += (prevAno[s]||0);
+    if((realAno[s]||0) > picoValor){ picoValor = realAno[s]||0; picoSemana = s; }
     if(mes){
       porMesProd[mes] = (porMesProd[mes]||0) + (realAno[s]||0);
       porMesPrev[mes] = (porMesPrev[mes]||0) + (prevAno[s]||0);
@@ -514,7 +529,7 @@ async function calcularAderenciaPrograma(){
   const previstoAcumMensal = MESES_ORDEM.map(m => acumPrevMes[m]!=null ? acumPrevMes[m] : null);
   const realizadoAcumMensal = MESES_ORDEM.map(m => acumRealMes[m]!=null ? acumRealMes[m] : null);
   const atual = semanaisAno.length ? semanaisAno.reduce((a,b)=>a+b,0)/semanaisAno.length : null;
-  return { atual, meses, cutoff, producaoMensal, previstoMensal, previstoAcumMensal, realizadoAcumMensal, totalProduzido, totalPrevisto };
+  return { atual, meses, cutoff, producaoMensal, previstoMensal, previstoAcumMensal, realizadoAcumMensal, totalProduzido, totalPrevisto, rankingProjetos, picoSemana, picoValor };
 }
 
 let dadosProducao = null;
@@ -919,10 +934,110 @@ function viewManutencaoInterna(grp){
 
 /* ---------------------------------------------------------------------
    Dashboard de Produção (reconstrução do painel Power BI "Performance
-   da Produção") — Total produzido e Aderência vêm da mesma planilha
-   oficial já usada na Visão Geral. Retrabalho ainda não tem fonte de
-   dados identificada, então fica marcado como pendente.
+   da Produção") — Total produzido, Aderência e ranking por projeto vêm
+   da mesma planilha oficial já usada na Visão Geral.
    --------------------------------------------------------------------- */
+function producaoStepSVG(qtyArr, pctArr, kpi){
+  const idxs = [];
+  for(let i=0;i<12;i++){ if(qtyArr[i]!=null || pctArr[i]!=null) idxs.push(i); }
+  if(!idxs.length) return '<div class="empty-state">Ainda sem histórico mensal de produção.</div>';
+
+  const w=680,h=230,P={l:46,r:46,t:24,b:34};
+  const span = Math.max(1, idxs.length-1);
+  const x = pos => P.l + (pos/span)*(w-P.l-P.r);
+
+  const qtyVals = idxs.map(i=>qtyArr[i]).filter(v=>v!=null);
+  const maxQty = Math.max(...qtyVals, 1) * 1.25;
+  const yQty = v => h-P.b - (v/maxQty)*(h-P.t-P.b);
+
+  const pctVals = idxs.map(i=>pctArr[i]).filter(v=>v!=null);
+  let loPct = Math.min(...(pctVals.length?pctVals:[70])), hiPct = Math.max(...(pctVals.length?pctVals:[110]));
+  const padPct = (hiPct-loPct)*0.3 || 10;
+  loPct -= padPct; hiPct += padPct;
+  const yPct = v => P.t + (hiPct-v)/((hiPct-loPct)||1)*(h-P.t-P.b);
+
+  let grid = '';
+  for(let k=0;k<=3;k++){
+    const v = maxQty*k/3;
+    const yy = yQty(v);
+    grid += `<line x1="${P.l}" y1="${yy.toFixed(1)}" x2="${w-P.r}" y2="${yy.toFixed(1)}" stroke="var(--line-soft)" stroke-width="1"/>`;
+    grid += `<text x="${P.l-8}" y="${(yy+3.5).toFixed(1)}" text-anchor="end" fill="var(--ink-faint)" font-size="9.5">${Math.round(v)}</text>`;
+  }
+  let rightAxis = '';
+  for(let k=0;k<=3;k++){
+    const v = loPct + (hiPct-loPct)*k/3;
+    const yy = yPct(v);
+    rightAxis += `<text x="${w-P.r+8}" y="${(yy+3.5).toFixed(1)}" text-anchor="start" fill="var(--ink-faint)" font-size="9.5">${Math.round(v)}%</text>`;
+  }
+
+  const barW = Math.min(26, (w-P.l-P.r)/idxs.length*0.5);
+  let bars = '';
+  idxs.forEach((mi,pos)=>{
+    const v = qtyArr[mi];
+    if(v==null) return;
+    const bx = x(pos)-barW/2, by = yQty(v);
+    bars += `<rect x="${bx.toFixed(1)}" y="${by.toFixed(1)}" width="${barW.toFixed(1)}" height="${(h-P.b-by).toFixed(1)}" rx="3" fill="var(--accent)" opacity="0.85"/>`;
+    bars += `<text x="${x(pos).toFixed(1)}" y="${(by-6).toFixed(1)}" text-anchor="middle" fill="var(--ink-dim)" font-size="9.5">${Math.round(v)}</text>`;
+  });
+
+  // linha em escada: segura o valor anterior até o próximo mês, depois sobe/desce
+  const linePts = idxs.map((mi,pos)=> pctArr[mi]!=null ? {pos,v:pctArr[mi]} : null).filter(Boolean);
+  let stepPath = '';
+  linePts.forEach((p,i)=>{
+    const px = x(p.pos).toFixed(1), py = yPct(p.v).toFixed(1);
+    if(i===0){ stepPath += `M${px},${py}`; }
+    else{ stepPath += ` L${px},${yPct(linePts[i-1].v).toFixed(1)} L${px},${py}`; }
+  });
+  const lineDots = linePts.map(p=>{
+    const n = nivel(p.v, kpi);
+    return `<circle cx="${x(p.pos).toFixed(1)}" cy="${yPct(p.v).toFixed(1)}" r="3.5" fill="${corNivel(n)}" stroke="var(--panel)" stroke-width="1.5"/>`;
+  }).join('');
+
+  const labels = idxs.map((mi,pos)=>`<text x="${x(pos).toFixed(1)}" y="${h-10}" text-anchor="middle" fill="var(--ink-faint)" font-size="9.5">${MESES_ORDEM[mi]}</text>`).join('');
+
+  return `<svg viewBox="0 0 ${w} ${h}" style="width:100%;height:auto;display:block">
+    ${grid}${bars}
+    <path d="${stepPath}" fill="none" stroke="var(--ink)" stroke-width="2" opacity="0.9"/>
+    ${lineDots}${rightAxis}${labels}
+  </svg>
+  <div class="bars-legend">
+    <span class="lg"><span class="sw" style="background:var(--accent)"></span>Equipamentos Produzidos (mês)</span>
+    <span class="lg"><span class="sw" style="background:var(--ink)"></span>Aderência à Programação (acumulado)</span>
+  </div>`;
+}
+function rankingProjetosHTML(ranking, kpi){
+  if(!ranking || !ranking.length) return '<div class="empty-state">Sem projetos com previsto no período.</div>';
+  const piores = ranking.slice(0,6);
+  return `<div class="funnel">${piores.map(p=>{
+    const n = nivel(p.pct,kpi);
+    const cor = n?corNivel(n):'var(--ink-faint)';
+    return `<div class="row">
+      <div class="flabel" title="${p.nome}">${p.nome}</div>
+      <div class="ftrack"><div class="ffill" style="width:${Math.min(100,p.pct)}%;background:${cor}"></div></div>
+      <div class="fval" style="color:${cor}">${p.pct.toFixed(0)}%</div>
+    </div>`;
+  }).join("")}</div>`;
+}
+function semaforoProjetosHTML(ranking, kpi){
+  if(!ranking || !ranking.length) return '<div class="empty-state">Sem projetos com previsto no período.</div>';
+  const counts = {n1:0,n2:0,n3:0,n4:0};
+  ranking.forEach(p=>{ const n = nivel(p.pct,kpi); if(n) counts[n]++; });
+  const total = ranking.length;
+  const ordem = ['n1','n2','n3','n4'];
+  let acc = 0;
+  const stops = ordem.map(k=>{
+    const pct = total ? counts[k]/total*100 : 0;
+    const start = acc; acc += pct;
+    return `var(--${k}) ${start.toFixed(1)}% ${acc.toFixed(1)}%`;
+  }).join(', ');
+  return `
+    <div class="semaforo-bar" style="background:${total?`linear-gradient(90deg, ${stops})`:'var(--line-soft)'}"></div>
+    <div class="donut-legend" style="margin-top:16px">
+      ${ordem.map(k=>`<div class="lg"><span class="sw" style="background:var(--${k})"></span>${k.toUpperCase()}<span class="pct">${counts[k]} projeto${counts[k]!==1?'s':''}</span></div>`).join("")}
+    </div>
+    <div class="foot-note" style="margin-top:10px;margin-bottom:0">${total} projetos com previsto no período, classificados pela mesma faixa da Aderência à Programação.</div>
+  `;
+}
 function previstoRealizadoAcumSVG(prevArr, realArr, kpi){
   const idxs = [];
   for(let i=0;i<12;i++){ if(prevArr[i]!=null || realArr[i]!=null) idxs.push(i); }
@@ -1016,12 +1131,10 @@ function producaoDashboardHTML(kpi, d){
       icon:'<path d="M3 3v18h18"/><path d="m19 9-5 5-4-4-3 3"/>' },
     { lbl:'Gap acumulado (Real. − Prev.)', val: gapTxt, cor: gapCor,
       icon:'<path d="M3 3v18h18"/><path d="m19 9-5 5-4-4-3 3"/><path d="M15 9h4v4"/>' },
-    { lbl:'Retrabalho (minutos)', val:'–', pend:true, cor:'var(--ink-faint)',
-      icon:'<circle cx="12" cy="12" r="10"/><path d="M12 8v4M12 16h.01"/>' },
-    { lbl:'Índice de Retrabalho', val:'–', pend:true, cor:'var(--ink-faint)',
-      icon:'<path d="M21 8V5l-9-4-9 4v14l9 4 9-4"/><path d="M3.3 7 12 12l8.7-5M12 22V12"/>' },
     { lbl:'Média Eq. Produzidos/mês', val: mediaMensal!=null?Math.round(mediaMensal).toLocaleString('pt-BR'):'–', cor:'var(--accent)',
       icon:'<path d="M3 3v18h18"/><rect x="7" y="10" width="3" height="8"/><rect x="12" y="6" width="3" height="12"/><rect x="17" y="13" width="3" height="5"/>' },
+    { lbl:'Semana de Pico', val: d.picoSemana?`${d.picoSemana} · ${Math.round(d.picoValor)} un.`:'–', cor:'var(--n4)',
+      icon:'<path d="M3 3v18h18"/><path d="m19 9-5 5-4-4-3 3"/><circle cx="19" cy="9" r="2"/>' },
   ];
 
   return `
@@ -1029,20 +1142,27 @@ function producaoDashboardHTML(kpi, d){
       ${kpiCards.map(c=>`
         <div class="mi-kpi" style="--bar:${c.cor}">
           <div class="lbl"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${c.icon}</svg>${c.lbl}</div>
-          <div class="val">${c.val}${c.badge?` <span class="tier-badge" style="background:${corNivel(c.badge)}">${c.badge.toUpperCase()}</span>`:''}${c.pend?`<span class="pend-tag">pendente</span>`:''}</div>
+          <div class="val">${c.val}${c.badge?` <span class="tier-badge" style="background:${corNivel(c.badge)}">${c.badge.toUpperCase()}</span>`:''}</div>
         </div>`).join("")}
     </div>
-    <div class="mi-panels">
+    <div class="panel" onclick="togglePanel(this)">
+      <h3><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 3v18h18"/><rect x="7" y="10" width="3" height="8"/><rect x="12" y="6" width="3" height="12"/><rect x="17" y="13" width="3" height="5"/></svg>Equipamentos produzidos vs. Aderência à Programação${EXPAND_IC}</h3>
+      ${producaoStepSVG(d.producaoMensal, kpi.meses, kpi)}
+    </div>
+    <div class="mi-panels-3" style="margin-top:14px">
       <div class="panel" onclick="togglePanel(this)">
         <h3><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 3v18h18"/><path d="m19 9-5 5-4-4-3 3"/></svg>Previsto vs Realizado (acumulado)${EXPAND_IC}</h3>
         ${previstoRealizadoAcumSVG(d.previstoAcumMensal, d.realizadoAcumMensal, kpi)}
       </div>
       <div class="panel" onclick="togglePanel(this)">
-        <h3><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 3v18h18"/><path d="m19 9-5 5-4-4-3 3"/></svg>Aderência à Programação (mês a mês)${EXPAND_IC}</h3>
-        ${sparklineSVG(kpi)}
+        <h3><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21.2 15.9A10 10 0 1 1 8 2.8"/><path d="M22 12A10 10 0 0 0 12 2v10z"/></svg>Semáforo de projetos${EXPAND_IC}</h3>
+        ${semaforoProjetosHTML(d.rankingProjetos, kpi)}
+      </div>
+      <div class="panel" onclick="togglePanel(this)">
+        <h3><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 3v18h18"/><rect x="7" y="10" width="3" height="8"/><rect x="12" y="6" width="3" height="12"/><rect x="17" y="13" width="3" height="5"/></svg>Projetos com menor aderência${EXPAND_IC}</h3>
+        ${rankingProjetosHTML(d.rankingProjetos, kpi)}
       </div>
     </div>
-    <div class="empty-state" style="margin-top:14px">Retrabalho por setor e por motivo aparecem aqui assim que a fonte de dados for conectada — ainda não identificamos de onde vem esse número.</div>
   `;
 }
 
