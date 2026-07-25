@@ -254,7 +254,6 @@
   .panel h3 svg{width:15px;height:15px;color:var(--accent);flex-shrink:0}
   .panel h3 .expand-ic{width:13px;height:13px;color:var(--ink-faint);margin-left:auto;transition:transform .18s}
   .panel.expanded h3 .expand-ic{transform:rotate(180deg)}
-  .panel svg[viewBox]:not(.expand-ic):not([viewBox="0 0 24 24"]){max-height:220px}
   .panel.expanded .bars-mes{height:300px}
   .panel.expanded .donut,.panel.expanded .donut::after{transition:.15s}
   .panel.expanded .donut{width:190px;height:190px}
@@ -312,6 +311,13 @@
   .map-tip b{display:block;font-size:12.5px;margin-bottom:4px}
   .map-tip .r{display:flex;justify-content:space-between;gap:14px;color:var(--ink-dim);margin-top:2px}
 
+  /* ---------- Seções numeradas (Estoque) ---------- */
+  .sec-head{display:flex;align-items:center;gap:10px;margin:28px 0 14px}
+  .sec-n{width:24px;height:24px;border-radius:7px;display:grid;place-items:center;font-size:12px;font-weight:800;color:#04160c;flex-shrink:0}
+  .sec-head h2{font-size:15px;font-weight:700;letter-spacing:-.01em;color:var(--ink)}
+  .sec-d{font-size:11.5px;color:var(--ink-dim);margin-left:2px}
+  hr.sec-sep{border:none;border-top:1px solid var(--line);margin:26px 0 0}
+
   @media(max-width:900px){
     .side{display:none}
     .cards{grid-template-columns:repeat(2,1fr)}
@@ -337,6 +343,7 @@
     <div class="nav" data-view="Produção" onclick="setView('Produção')" title="Produção"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 20a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V8l-7 5V8l-7 5V4l-6 5Z"/><path d="M17 18h1"/><path d="M12 18h1"/><path d="M7 18h1"/></svg><span class="label">Produção</span></div>
     <div class="nav" data-view="Manutenção Interna" onclick="setView('Manutenção Interna')" title="Manutenção Interna"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14.7 6.3a4 4 0 0 0-5.4 5.4L3 18v3h3l6.3-6.3a4 4 0 0 0 5.4-5.4l-2.1 2.1-2-2 2.1-2.1z"/></svg><span class="label">Manutenção Interna</span></div>
     <div class="nav" data-view="Filiais" onclick="setView('Filiais')" title="Filiais"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 8V5a1 1 0 0 0-.5-.87l-7.5-4.3a2 2 0 0 0-2 0L3.5 4.13A1 1 0 0 0 3 5v14a1 1 0 0 0 .5.87l7.5 4.3a2 2 0 0 0 2 0"/><path d="M3.3 7 12 12l8.7-5M12 22V12"/></svg><span class="label">Filiais</span></div>
+    <div class="nav" data-view="Estoque" onclick="setView('Estoque')" title="Estoque"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 9h18M3 9v10a1 1 0 0 0 1 1h16a1 1 0 0 0 1-1V9M3 9l2-5h14l2 5"/><path d="M9 13h6"/></svg><span class="label">Estoque</span></div>
     <div class="nav" data-view="Logística" onclick="setView('Logística')" title="Logística"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 3h15v13H1z"/><path d="M16 8h4l3 3v5h-7z"/><circle cx="5.5" cy="18.5" r="2.5"/><circle cx="18.5" cy="18.5" r="2.5"/></svg><span class="label">Logística</span></div>
     <div class="cap">Painéis completos</div>
     <div class="nav ext" onclick="window.open('https://cronograma-producao-psi.vercel.app/','_blank')" title="Cronograma de Produção"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg><span class="label">Cronograma de Produção</span></div>
@@ -757,6 +764,8 @@ function viewGeral(){
 }
 
 function viewArea(area){
+  if(area === 'Estoque') return viewEstoqueMatriz(); // área operacional, sem KPI oficial atrelado na Matriz de Metas
+
   const grp = METAS.find(m=>m.area===area);
   if(!grp){ currentView='geral'; return viewGeral(); }
 
@@ -787,12 +796,7 @@ function viewArea(area){
    --------------------------------------------------------------------- */
 const EXPAND_IC = '<svg class="expand-ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>';
 function togglePanel(el){
-  const expanded = el.classList.toggle('expanded');
-  el.querySelectorAll('svg[viewBox]').forEach(svg=>{
-    const vb = svg.getAttribute('viewBox');
-    if(vb==='0 0 24 24') return; // ícones pequenos (título, chevron) não mexem
-    svg.style.maxHeight = expanded ? '420px' : '220px';
-  });
+  el.classList.toggle('expanded');
 }
 function fmtGrande(v){
   if(v==null) return '–';
@@ -956,7 +960,7 @@ function producaoStepSVG(qtyArr, pctArr, kpi){
   for(let i=0;i<12;i++){ if(qtyArr[i]!=null || pctArr[i]!=null) idxs.push(i); }
   if(!idxs.length) return '<div class="empty-state">Ainda sem histórico mensal de produção.</div>';
 
-  const w=680,h=230,P={l:46,r:46,t:24,b:34};
+  const w=1000,h=210,P={l:46,r:46,t:24,b:34};
   const span = Math.max(1, idxs.length-1);
   const x = pos => P.l + (pos/span)*(w-P.l-P.r);
 
@@ -1339,6 +1343,68 @@ function viewFiliais(grp){
   }
 }
 
+/* ---------------------------------------------------------------------
+   Estoque (Matriz) — acuracidade por contagem cíclica + inventário geral,
+   giro de estoque e itens parados. Fontes ainda não conectadas.
+   --------------------------------------------------------------------- */
+function secaoEstoqueHTML(num, cor, titulo, desc, cards, notaVazia){
+  return `
+    <div class="sec-head" style="${num===1?'margin-top:0':''}">
+      <div class="sec-n" style="background:${cor}">${num}</div>
+      <h2>${titulo}</h2>
+      <span class="sec-d">${desc}</span>
+    </div>
+    <div class="mi-kpis">
+      ${cards.map(c=>`
+        <div class="mi-kpi" style="--bar:var(--ink-faint)">
+          <div class="lbl"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${c.icon}</svg>${c.lbl}</div>
+          <div class="val">–<span class="pend-tag">pendente</span></div>
+        </div>`).join("")}
+    </div>
+    <div class="empty-state">${notaVazia}</div>
+  `;
+}
+function viewEstoqueMatriz(){
+  const secAcuracia = secaoEstoqueHTML(1, 'var(--n4)', 'Acurácia de Estoque', 'contagens cíclicas mensais + inventário geral em dezembro',
+    [
+      { lbl:'Acurácia — Inventário Geral (dez)', icon:'<path d="M9 12l2 2 4-4"/><path d="M21 12c0 4.97-4.03 9-9 9s-9-4.03-9-9 4.03-9 9-9c1.66 0 3.22.45 4.56 1.24"/>' },
+      { lbl:'Acurácia média — cíclicos', icon:'<path d="M3 12a9 9 0 0 1 9-9 9 9 0 0 1 6.7 3M21 12a9 9 0 0 1-9 9 9 9 0 0 1-6.7-3"/>' },
+      { lbl:'Cobertura do ciclo', icon:'<path d="M21 8V5l-9-4-9 4v14l9 4 9-4"/><path d="M3.3 7 12 12l8.7-5M12 22V12"/>' },
+      { lbl:'Divergências (Inventário Geral)', icon:'<path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><path d="M12 9v4M12 17h.01"/>' },
+    ],
+    'Assim que a fonte for conectada, aqui entram: o gráfico de evolução mensal da acurácia (%) com a meta e o ponto do inventário geral de dezembro destacado, e a tabela mês a mês com contados, divergências e acurácia.'
+  );
+
+  const secGiro = secaoEstoqueHTML(2, 'var(--accent)', 'Giro de Estoque', 'velocidade de consumo por item',
+    [
+      { lbl:'Giro médio do período', icon:'<path d="M3 12a9 9 0 0 1 9-9 9 9 0 0 1 6.7 3M21 12a9 9 0 0 1-9 9 9 9 0 0 1-6.7-3"/>' },
+      { lbl:'Dias médios de estoque', icon:'<rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/>' },
+      { lbl:'Valor total em estoque', icon:'<path d="M21 8V5l-9-4-9 4v14l9 4 9-4"/><path d="M3.3 7 12 12l8.7-5M12 22V12"/>' },
+      { lbl:'CMV total no período', icon:'<path d="M3 3v18h18"/><path d="m19 9-5 5-4-4-3 3"/>' },
+    ],
+    'Assim que a fonte for conectada, aqui entram: o ranking de giro por item (vezes) com a linha de meta, e um donut classificando os itens em Alto/Médio/Baixo giro.'
+  );
+
+  const secParados = secaoEstoqueHTML(3, 'var(--n1)', 'Itens Parados', 'sem consumo há mais de 180 dias',
+    [
+      { lbl:'Itens parados (>180 dias)', icon:'<circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/>' },
+      { lbl:'Valor total imobilizado', icon:'<path d="M21 8V5l-9-4-9 4v14l9 4 9-4"/><path d="M3.3 7 12 12l8.7-5M12 22V12"/>' },
+      { lbl:'Itens críticos (>360 dias)', icon:'<path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><path d="M12 9v4M12 17h.01"/>' },
+      { lbl:'Item mais antigo parado', icon:'<rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/>' },
+    ],
+    'Assim que a fonte for conectada, aqui entram: o valor imobilizado por faixa de aging (Atenção 180-270d, Alto 270-360d, Crítico +360d), um donut de itens por faixa, e a tabela completa de itens parados (código, descrição, categoria, dias e valor).'
+  );
+
+  document.getElementById('view-root').innerHTML = `
+    ${topBarHTML('Painéis da área', 'Estoque', null)}
+    ${secAcuracia}
+    <hr class="sec-sep">
+    ${secGiro}
+    <hr class="sec-sep">
+    ${secParados}
+  `;
+}
+
 function renderCards(areas){
   const el = document.getElementById("cards");
   if(!el) return;
@@ -1359,6 +1425,7 @@ function areaIcon(area,small){
     "Produção":`<path d="M2 20a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V8l-7 5V8l-7 5V4l-6 5Z"/><path d="M17 18h1"/><path d="M12 18h1"/><path d="M7 18h1"/>`,
     "Manutenção Interna":`<path d="M14.7 6.3a4 4 0 0 0-5.4 5.4L3 18v3h3l6.3-6.3a4 4 0 0 0 5.4-5.4l-2.1 2.1-2-2 2.1-2.1z"/>`,
     "Filiais":`<path d="M21 8V5l-9-4-9 4v14l9 4 9-4"/><path d="M3.3 7 12 12l8.7-5M12 22V12"/>`,
+    "Estoque":`<path d="M3 9h18M3 9v10a1 1 0 0 0 1 1h16a1 1 0 0 0 1-1V9M3 9l2-5h14l2 5"/><path d="M9 13h6"/>`,
     "Logística":`<path d="M1 3h15v13H1z"/><path d="M16 8h4l3 3v5h-7z"/><circle cx="5.5" cy="18.5" r="2.5"/><circle cx="18.5" cy="18.5" r="2.5"/>`,
   };
   return `<svg viewBox="0 0 24 24" ${s} fill="none" stroke="currentColor" stroke-width="2" style="vertical-align:-2px;margin-right:6px">${map[area]||""}</svg>`;
