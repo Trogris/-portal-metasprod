@@ -1,4 +1,4 @@
-# Portal de Metas — Fiscaltech 2026
+# Portal de Metas 
 
 Tela única consolidando as metas de todas as áreas sob responsabilidade (Produção, MI, Estoque, Logística), com nível N1–N4 conforme a Matriz de Metas 2026.
 
