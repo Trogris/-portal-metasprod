@@ -344,6 +344,7 @@
     <div class="nav" data-view="Manutenção Interna" onclick="setView('Manutenção Interna')" title="Manutenção Interna"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14.7 6.3a4 4 0 0 0-5.4 5.4L3 18v3h3l6.3-6.3a4 4 0 0 0 5.4-5.4l-2.1 2.1-2-2 2.1-2.1z"/></svg><span class="label">Manutenção Interna</span></div>
     <div class="nav" data-view="Filiais" onclick="setView('Filiais')" title="Filiais"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 8V5a1 1 0 0 0-.5-.87l-7.5-4.3a2 2 0 0 0-2 0L3.5 4.13A1 1 0 0 0 3 5v14a1 1 0 0 0 .5.87l7.5 4.3a2 2 0 0 0 2 0"/><path d="M3.3 7 12 12l8.7-5M12 22V12"/></svg><span class="label">Filiais</span></div>
     <div class="nav" data-view="Estoque" onclick="setView('Estoque')" title="Estoque"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 9h18M3 9v10a1 1 0 0 0 1 1h16a1 1 0 0 0 1-1V9M3 9l2-5h14l2 5"/><path d="M9 13h6"/></svg><span class="label">Estoque</span></div>
+    <div class="nav" data-view="Frota" onclick="setView('Frota')" title="Frota"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10 17h4V5H2v12h3"/><path d="M20 17h2v-3.34a4 4 0 0 0-1.17-2.83L19 9h-5v8h1"/><circle cx="7.5" cy="17.5" r="2.5"/><circle cx="17.5" cy="17.5" r="2.5"/></svg><span class="label">Frota</span></div>
     <div class="nav" data-view="Logística" onclick="setView('Logística')" title="Logística"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 3h15v13H1z"/><path d="M16 8h4l3 3v5h-7z"/><circle cx="5.5" cy="18.5" r="2.5"/><circle cx="18.5" cy="18.5" r="2.5"/></svg><span class="label">Logística</span></div>
     <div class="cap">Painéis completos</div>
     <div class="nav ext" onclick="window.open('https://cronograma-producao-psi.vercel.app/','_blank')" title="Cronograma de Produção"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg><span class="label">Cronograma de Produção</span></div>
@@ -765,6 +766,7 @@ function viewGeral(){
 
 function viewArea(area){
   if(area === 'Estoque') return viewEstoqueMatriz(); // área operacional, sem KPI oficial atrelado na Matriz de Metas
+  if(area === 'Frota') return viewFrota(); // idem — checklist de inspeção veicular, sem KPI oficial atrelado na Matriz de Metas
 
   const grp = METAS.find(m=>m.area===area);
   if(!grp){ currentView='geral'; return viewGeral(); }
@@ -1345,64 +1347,605 @@ function viewFiliais(grp){
 
 /* ---------------------------------------------------------------------
    Estoque (Matriz) — acuracidade por contagem cíclica + inventário geral,
-   giro de estoque e itens parados. Fontes ainda não conectadas.
+   giro de estoque e itens parados. AINDA SEM FONTE REAL: usa dados
+   fictícios (a pedido do usuário) só pra servir de modelo visual.
+   Trocar DADOS_ESTOQUE_EXEMPLO por uma busca real quando a fonte chegar.
    --------------------------------------------------------------------- */
-function secaoEstoqueHTML(num, cor, titulo, desc, cards, notaVazia){
-  return `
-    <div class="sec-head" style="${num===1?'margin-top:0':''}">
-      <div class="sec-n" style="background:${cor}">${num}</div>
-      <h2>${titulo}</h2>
-      <span class="sec-d">${desc}</span>
+const DADOS_ESTOQUE_EXEMPLO = {
+  acuracia:{
+    meta:98, total_skus:1850,
+    meses:[
+      {mes:"jan",tipo:"Cíclico",contados:150,divergencias:6},
+      {mes:"fev",tipo:"Cíclico",contados:160,divergencias:5},
+      {mes:"mar",tipo:"Cíclico",contados:145,divergencias:7},
+      {mes:"abr",tipo:"Cíclico",contados:170,divergencias:4},
+      {mes:"mai",tipo:"Cíclico",contados:155,divergencias:5},
+      {mes:"jun",tipo:"Cíclico",contados:165,divergencias:3},
+      {mes:"jul",tipo:"Cíclico",contados:160,divergencias:4},
+      {mes:"ago",tipo:"Cíclico",contados:150,divergencias:3},
+      {mes:"set",tipo:"Cíclico",contados:158,divergencias:2},
+      {mes:"out",tipo:"Cíclico",contados:162,divergencias:3},
+      {mes:"nov",tipo:"Cíclico",contados:150,divergencias:2},
+      {mes:"dez",tipo:"Geral",  contados:1850,divergencias:41},
+    ]
+  },
+  giro:{
+    meta_giro:3.0, dias_periodo:360,
+    itens:[
+      {codigo:"RAD-001", desc:"Antena radar banda K",      cat:"Radar",       estoque_medio:100000, cmv:450000},
+      {codigo:"RAD-002", desc:"Módulo processamento DSP",   cat:"Radar",       estoque_medio:75000,  cmv:300000},
+      {codigo:"FF-003",  desc:"Câmera LPR Free Flow",       cat:"Free Flow",   estoque_medio:130000, cmv:260000},
+      {codigo:"WIM-004", desc:"Sensor piezoelétrico WIM",   cat:"HS-WIM",      estoque_medio:180000, cmv:360000},
+      {codigo:"FF-005",  desc:"Controladora de faixa",      cat:"Free Flow",   estoque_medio:50000,  cmv:220000},
+      {codigo:"EST-006", desc:"Estrutura pórtico galv.",    cat:"Infra",       estoque_medio:75000,  cmv:105000},
+      {codigo:"EST-007", desc:"Poste metálico 6m",          cat:"Infra",       estoque_medio:125000, cmv:150000},
+      {codigo:"RAD-008", desc:"Placa RF front-end",         cat:"Radar",       estoque_medio:42500,  cmv:212500},
+      {codigo:"CAB-009", desc:"Chicote / cabeamento",       cat:"Componentes", estoque_medio:30000,  cmv:90000},
+      {codigo:"GAB-010", desc:"Gabinete outdoor IP66",      cat:"Infra",       estoque_medio:47500,  cmv:61750},
+    ]
+  },
+  parados:{
+    itens:[
+      {codigo:"LEG-021", desc:"Controladora modelo legado v1", cat:"Free Flow",   dias:612, valor:38500},
+      {codigo:"LEG-022", desc:"Sensor indutivo obsoleto",       cat:"HS-WIM",      dias:405, valor:22000},
+      {codigo:"EST-030", desc:"Poste modelo descontinuado",     cat:"Infra",       dias:390, valor:41000},
+      {codigo:"RAD-019", desc:"Placa RF rev. B (substituída)",  cat:"Radar",       dias:295, valor:29500},
+      {codigo:"CAB-014", desc:"Cabo blindado spec antiga",      cat:"Componentes", dias:260, valor:9800},
+      {codigo:"GAB-017", desc:"Gabinete IP65 (fora de linha)",  cat:"Infra",       dias:230, valor:15600},
+      {codigo:"FF-025",  desc:"Kit fixação modelo antigo",      cat:"Free Flow",   dias:205, valor:12400},
+      {codigo:"COM-018", desc:"Switch modelo anterior",         cat:"Comunicação", dias:190, valor:18200},
+      {codigo:"PWR-016", desc:"Fonte 12V (linha descontinuada)",cat:"Componentes", dias:183, valor:7600},
+    ]
+  }
+};
+
+function donutGenericoHTML(entries, centerLabel){
+  const total = entries.reduce((s,e)=>s+e.val,0);
+  let acc = 0;
+  const stops = entries.map(e=>{
+    const pct = total ? e.val/total*100 : 0;
+    const start = acc; acc += pct;
+    return `${e.cor} ${start.toFixed(1)}% ${acc.toFixed(1)}%`;
+  }).join(', ');
+  return `<div class="donut-wrap">
+    <div class="donut" style="background:${total?`conic-gradient(${stops})`:'var(--line-soft)'}">
+      <div class="d-center"><b>${total}</b><span>${centerLabel}</span></div>
     </div>
+    <div class="donut-legend">
+      ${entries.map(e=>`<div class="lg"><span class="sw" style="background:${e.cor}"></span>${e.label}<span class="pct">${e.val} · ${total?Math.round(e.val/total*100):0}%</span></div>`).join("")}
+    </div>
+  </div>`;
+}
+
+function acuraciaLineSVG(meses, meta){
+  const w=1000,h=230,P={l:50,r:26,t:24,b:34};
+  const vals = meses.map(m=>m.acuracia);
+  let lo = Math.min(...vals, meta), hi = Math.max(...vals, meta);
+  const pad = (hi-lo)*0.3 || 5; lo -= pad; hi += pad*0.35; if(hi>100) hi=100.5;
+  const x = i => P.l + (i/(meses.length-1))*(w-P.l-P.r);
+  const y = v => P.t + (hi-v)/((hi-lo)||1)*(h-P.t-P.b);
+
+  let grid = '';
+  for(let k=0;k<=3;k++){
+    const v = lo+(hi-lo)*k/3;
+    const yy = y(v);
+    grid += `<line x1="${P.l}" y1="${yy.toFixed(1)}" x2="${w-P.r}" y2="${yy.toFixed(1)}" stroke="var(--line-soft)" stroke-width="1"/>`;
+    grid += `<text x="${P.l-8}" y="${(yy+3.5).toFixed(1)}" text-anchor="end" fill="var(--ink-faint)" font-size="9.5">${v.toFixed(1)}%</text>`;
+  }
+  const labels = meses.map((m,i)=>{
+    const isGeral = m.tipo==='Geral';
+    return `<text x="${x(i).toFixed(1)}" y="${h-10}" text-anchor="middle" fill="${isGeral?'var(--accent)':'var(--ink-faint)'}" font-weight="${isGeral?700:400}" font-size="9.5">${m.mes}${isGeral?' ●':''}</text>`;
+  }).join('');
+
+  const ym = y(meta);
+  const metaLine = `<line x1="${P.l}" y1="${ym.toFixed(1)}" x2="${w-P.r}" y2="${ym.toFixed(1)}" stroke="var(--n2)" stroke-width="1.5" stroke-dasharray="5 4" opacity=".9"/>
+    <text x="${w-P.r}" y="${(ym-6).toFixed(1)}" text-anchor="end" fill="var(--n2)" font-size="9.5" font-weight="600">meta ${meta}%</text>`;
+
+  const path = meses.map((m,i)=>`${i===0?'M':'L'}${x(i).toFixed(1)},${y(m.acuracia).toFixed(1)}`).join(' ');
+  const areaBottom=(h-P.b).toFixed(1);
+  const area = `${path} L${x(meses.length-1).toFixed(1)},${areaBottom} L${x(0).toFixed(1)},${areaBottom} Z`;
+
+  const dots = meses.map((m,i)=>{
+    const isGeral = m.tipo==='Geral';
+    const good = m.acuracia>=meta;
+    const cor = good?'var(--n4)':'var(--n1)';
+    const r = isGeral?6:3.5;
+    const ring = isGeral?`<circle cx="${x(i).toFixed(1)}" cy="${y(m.acuracia).toFixed(1)}" r="${r+3}" fill="none" stroke="var(--accent)" stroke-width="2"/>`:'';
+    return `${ring}<circle cx="${x(i).toFixed(1)}" cy="${y(m.acuracia).toFixed(1)}" r="${r}" fill="${cor}" stroke="var(--panel)" stroke-width="1.5"/>
+      <text x="${x(i).toFixed(1)}" y="${(y(m.acuracia)-11).toFixed(1)}" text-anchor="middle" fill="var(--ink)" font-size="9.5" font-weight="${isGeral?700:600}">${m.acuracia.toFixed(1)}%</text>`;
+  }).join('');
+
+  return `<svg viewBox="0 0 ${w} ${h}" style="width:100%;height:auto;display:block">
+    <defs><linearGradient id="estGrad" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="var(--accent)" stop-opacity=".28"/>
+      <stop offset="1" stop-color="var(--accent)" stop-opacity="0"/>
+    </linearGradient></defs>
+    ${grid}
+    <path d="${area}" fill="url(#estGrad)"/>
+    ${metaLine}
+    <path d="${path}" fill="none" stroke="var(--accent)" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round"/>
+    ${dots}
+    ${labels}
+  </svg>`;
+}
+
+function secaoAcuraciaHTML(D){
+  const enr = D.meses.map(m=>({...m, acuracia:(1-m.divergencias/m.contados)*100}));
+  const geral = enr.find(m=>m.tipo==='Geral');
+  const ciclicos = enr.filter(m=>m.tipo==='Cíclico');
+  const acurCiclicaMedia = ciclicos.reduce((s,m)=>s+m.acuracia,0)/ciclicos.length;
+  const coberturaAcum = ciclicos.reduce((s,m)=>s+m.contados,0);
+
+  const cards = [
+    { lbl:'Acurácia — Inventário Geral', val:geral.acuracia.toFixed(1)+'%', sub:`meta ${D.meta}% · ${geral.contados.toLocaleString('pt-BR')} SKUs`, cor: geral.acuracia>=D.meta?'var(--n4)':'var(--n1)',
+      icon:'<path d="M9 12l2 2 4-4"/><path d="M21 12c0 4.97-4.03 9-9 9s-9-4.03-9-9 4.03-9 9-9c1.66 0 3.22.45 4.56 1.24"/>' },
+    { lbl:'Acurácia média — cíclicos', val:acurCiclicaMedia.toFixed(1)+'%', sub:'base amostral mensal', cor: acurCiclicaMedia>=D.meta?'var(--n4)':'var(--n2)',
+      icon:'<path d="M3 12a9 9 0 0 1 9-9 9 9 0 0 1 6.7 3M21 12a9 9 0 0 1-9 9 9 9 0 0 1-6.7-3"/>' },
+    { lbl:'Cobertura do ciclo', val:Math.min(100,coberturaAcum/D.total_skus*100).toFixed(1)+'%', sub:`${coberturaAcum.toLocaleString('pt-BR')} de ${D.total_skus.toLocaleString('pt-BR')} SKUs`, cor:'var(--accent)',
+      icon:'<path d="M21 8V5l-9-4-9 4v14l9 4 9-4"/><path d="M3.3 7 12 12l8.7-5M12 22V12"/>' },
+    { lbl:'Divergências (Inventário Geral)', val:geral.divergencias.toString(), sub:(geral.divergencias/geral.contados*100).toFixed(1)+'% dos SKUs', cor:'var(--n1)',
+      icon:'<path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><path d="M12 9v4M12 17h.01"/>' },
+  ];
+
+  const rows = enr.map(m=>{
+    const cor = m.acuracia>=D.meta?'var(--n4)':'var(--n1)';
+    return `<tr class="${m.tipo==='Geral'?'col-active':''}">
+      <td class="name" style="text-transform:capitalize">${m.mes}</td>
+      <td class="num dim">${m.tipo==='Geral'?'● Inventário Geral':'Cíclico'}</td>
+      <td class="num">${m.contados.toLocaleString('pt-BR')}</td>
+      <td class="num">${m.divergencias}</td>
+      <td class="num" style="color:${cor};font-weight:700">${m.acuracia.toFixed(1)}%</td>
+    </tr>`;
+  }).join("");
+  const totC=enr.reduce((s,m)=>s+m.contados,0), totD=enr.reduce((s,m)=>s+m.divergencias,0);
+  const mediaGeral = enr.reduce((s,m)=>s+m.acuracia,0)/enr.length;
+
+  return `
+    <div class="sec-head" style="margin-top:0"><div class="sec-n" style="background:var(--n4)">1</div><h2>Acurácia de Estoque</h2><span class="sec-d">contagens cíclicas mensais + inventário geral em dezembro</span></div>
     <div class="mi-kpis">
       ${cards.map(c=>`
-        <div class="mi-kpi" style="--bar:var(--ink-faint)">
+        <div class="mi-kpi" style="--bar:${c.cor}">
           <div class="lbl"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${c.icon}</svg>${c.lbl}</div>
-          <div class="val">–<span class="pend-tag">pendente</span></div>
+          <div class="val">${c.val}</div>
+          <div class="sub" style="font-size:10.5px;color:var(--ink-faint);margin-top:2px">${c.sub}</div>
         </div>`).join("")}
     </div>
-    <div class="empty-state">${notaVazia}</div>
+    <div class="panel" onclick="togglePanel(this)">
+      <h3><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 3v18h18"/><path d="m19 9-5 5-4-4-3 3"/></svg>Evolução da acurácia (%)${EXPAND_IC}</h3>
+      ${acuraciaLineSVG(enr, D.meta)}
+    </div>
+    <div class="tablewrap" style="margin-top:14px">
+      <div class="scroll">
+        <table>
+          <thead><tr><th class="name">Mês</th><th>Tipo</th><th>Contados</th><th>Divergências</th><th>Acurácia</th></tr></thead>
+          <tbody>${rows}</tbody>
+        </table>
+      </div>
+      <div class="foot"><div>Total contados: ${totC.toLocaleString('pt-BR')} · Divergências: ${totD}</div><div>Média geral: ${mediaGeral.toFixed(1)}%</div></div>
+    </div>
   `;
 }
+
+const CLASSES_GIRO = {Alto:'var(--n4)', Médio:'var(--n2)', Baixo:'var(--n1)'};
+function classificarGiro(g){ return g>=3?'Alto':g>=1.5?'Médio':'Baixo'; }
+function secaoGiroHTML(D){
+  const itens = D.itens.map(it=>{
+    const giro = it.cmv/it.estoque_medio;
+    return {...it, giro, classe:classificarGiro(giro)};
+  });
+  const somaEst=itens.reduce((s,i)=>s+i.estoque_medio,0), somaCmv=itens.reduce((s,i)=>s+i.cmv,0);
+  const giroMedio=somaCmv/somaEst, diasMedio=Math.round(D.dias_periodo/giroMedio);
+
+  const cards = [
+    { lbl:'Giro médio do período', val:giroMedio.toFixed(2)+' ×', sub:'CMV ÷ estoque médio', cor:'var(--n4)',
+      icon:'<path d="M3 12a9 9 0 0 1 9-9 9 9 0 0 1 6.7 3M21 12a9 9 0 0 1-9 9 9 9 0 0 1-6.7-3"/>' },
+    { lbl:'Dias médios de estoque', val:diasMedio+' dias', sub:D.dias_periodo+' ÷ giro', cor:'var(--n2)',
+      icon:'<rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/>' },
+    { lbl:'Valor total em estoque', val:'R$ '+Math.round(somaEst).toLocaleString('pt-BR'), sub:itens.length+' itens', cor:'var(--accent)',
+      icon:'<path d="M21 8V5l-9-4-9 4v14l9 4 9-4"/><path d="M3.3 7 12 12l8.7-5M12 22V12"/>' },
+    { lbl:'CMV total no período', val:'R$ '+Math.round(somaCmv).toLocaleString('pt-BR'), sub:'consumo de estoque', cor:'var(--accent)',
+      icon:'<path d="M3 3v18h18"/><path d="m19 9-5 5-4-4-3 3"/>' },
+  ];
+
+  const rank = [...itens].sort((a,b)=>b.giro-a.giro);
+  const rankingHTML = `<div class="funnel">${rank.map(i=>`
+    <div class="row">
+      <div class="flabel" title="${i.desc}">${i.desc}</div>
+      <div class="ftrack"><div class="ffill" style="width:${Math.min(100,i.giro/Math.max(...rank.map(r=>r.giro))*100)}%;background:${CLASSES_GIRO[i.classe]}"></div></div>
+      <div class="fval" style="color:${CLASSES_GIRO[i.classe]}">${i.giro.toFixed(2)}×</div>
+    </div>`).join("")}</div>`;
+
+  const counts={Alto:0,Médio:0,Baixo:0}; itens.forEach(i=>counts[i.classe]++);
+  const donutHTMLGiro = donutGenericoHTML([
+    {label:'Alto (≥3,0)', val:counts.Alto, cor:CLASSES_GIRO.Alto},
+    {label:'Médio (1,5–2,9)', val:counts.Médio, cor:CLASSES_GIRO.Médio},
+    {label:'Baixo (<1,5)', val:counts.Baixo, cor:CLASSES_GIRO.Baixo},
+  ], 'itens');
+
+  return `
+    <div class="sec-head"><div class="sec-n" style="background:var(--accent)">2</div><h2>Giro de Estoque</h2><span class="sec-d">velocidade de consumo por item · meta ${D.meta_giro.toFixed(1)}×</span></div>
+    <div class="mi-kpis">
+      ${cards.map(c=>`
+        <div class="mi-kpi" style="--bar:${c.cor}">
+          <div class="lbl"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${c.icon}</svg>${c.lbl}</div>
+          <div class="val">${c.val}</div>
+          <div class="sub" style="font-size:10.5px;color:var(--ink-faint);margin-top:2px">${c.sub}</div>
+        </div>`).join("")}
+    </div>
+    <div class="mi-panels">
+      <div class="panel" onclick="togglePanel(this)">
+        <h3><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 3v18h18"/><rect x="7" y="10" width="3" height="8"/><rect x="12" y="6" width="3" height="12"/><rect x="17" y="13" width="3" height="5"/></svg>Giro por item (vezes)${EXPAND_IC}</h3>
+        ${rankingHTML}
+      </div>
+      <div class="panel" onclick="togglePanel(this)">
+        <h3><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21.2 15.9A10 10 0 1 1 8 2.8"/><path d="M22 12A10 10 0 0 0 12 2v10z"/></svg>Classificação por giro${EXPAND_IC}</h3>
+        ${donutHTMLGiro}
+      </div>
+    </div>
+  `;
+}
+
+function faixaAging(d){ return d>360?'Crítico (+360d)': d>270?'Alto (270-360d)':'Atenção (180-270d)'; }
+const FAIXA_COR = {'Crítico (+360d)':'#8a1f1f','Alto (270-360d)':'var(--n1)','Atenção (180-270d)':'var(--n2)'};
+function secaoParadosHTML(D){
+  const itens = D.itens.map(i=>({...i, faixa:faixaAging(i.dias)}));
+  const valorTotal = itens.reduce((s,i)=>s+i.valor,0);
+  const critico = itens.filter(i=>i.dias>360);
+  const maisAntigo = [...itens].sort((a,b)=>b.dias-a.dias)[0];
+
+  const cards = [
+    { lbl:'Itens parados (+180 dias)', val:itens.length.toString(), sub:'sem consumo no período', cor:'var(--n2)',
+      icon:'<circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/>' },
+    { lbl:'Valor total imobilizado', val:'R$ '+valorTotal.toLocaleString('pt-BR'), sub:'capital parado', cor:'var(--n1)',
+      icon:'<path d="M21 8V5l-9-4-9 4v14l9 4 9-4"/><path d="M3.3 7 12 12l8.7-5M12 22V12"/>' },
+    { lbl:'Itens críticos (+360 dias)', val:critico.length.toString(), sub:'R$ '+critico.reduce((s,i)=>s+i.valor,0).toLocaleString('pt-BR'), cor:'#8a1f1f',
+      icon:'<path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><path d="M12 9v4M12 17h.01"/>' },
+    { lbl:'Item mais antigo parado', val:maisAntigo.dias+' dias', sub:maisAntigo.desc, cor:'var(--ink-faint)',
+      icon:'<rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/>' },
+  ];
+
+  const ordem = ['Atenção (180-270d)','Alto (270-360d)','Crítico (+360d)'];
+  const valPorFaixa = ordem.map(f=>({f,v:itens.filter(i=>i.faixa===f).reduce((s,i)=>s+i.valor,0)}));
+  const maxV = Math.max(...valPorFaixa.map(x=>x.v),1);
+  const rankingHTML = `<div class="funnel">${valPorFaixa.map(x=>`
+    <div class="row">
+      <div class="flabel">${x.f}</div>
+      <div class="ftrack"><div class="ffill" style="width:${x.v/maxV*100}%;background:${FAIXA_COR[x.f]}"></div></div>
+      <div class="fval" style="color:${FAIXA_COR[x.f]}">R$ ${x.v.toLocaleString('pt-BR')}</div>
+    </div>`).join("")}</div>`;
+
+  const cnt = {}; ordem.forEach(f=>cnt[f]=itens.filter(i=>i.faixa===f).length);
+  const donutHTMLParados = donutGenericoHTML(ordem.map(f=>({label:f, val:cnt[f], cor:FAIXA_COR[f]})), 'itens');
+
+  const rows = [...itens].sort((a,b)=>b.dias-a.dias).map(i=>`
+    <tr>
+      <td class="name">${i.desc}<span class="pend-tag" style="border-color:transparent;color:var(--ink-faint)">${i.codigo}</span></td>
+      <td class="num dim">${i.cat}</td>
+      <td class="num" style="color:${FAIXA_COR[i.faixa]};font-weight:700">${i.dias}</td>
+      <td class="num">R$ ${i.valor.toLocaleString('pt-BR')}</td>
+      <td class="desemp" style="color:${FAIXA_COR[i.faixa]}">${i.faixa.split(' (')[0]}</td>
+    </tr>`).join("");
+
+  return `
+    <div class="sec-head"><div class="sec-n" style="background:var(--n1)">3</div><h2>Itens Parados</h2><span class="sec-d">sem consumo há mais de 180 dias</span></div>
+    <div class="mi-kpis">
+      ${cards.map(c=>`
+        <div class="mi-kpi" style="--bar:${c.cor}">
+          <div class="lbl"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${c.icon}</svg>${c.lbl}</div>
+          <div class="val">${c.val}</div>
+          <div class="sub" style="font-size:10.5px;color:var(--ink-faint);margin-top:2px">${c.sub}</div>
+        </div>`).join("")}
+    </div>
+    <div class="mi-panels">
+      <div class="panel" onclick="togglePanel(this)">
+        <h3><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 3v18h18"/><rect x="7" y="10" width="3" height="8"/><rect x="12" y="6" width="3" height="12"/><rect x="17" y="13" width="3" height="5"/></svg>Valor imobilizado por faixa de aging${EXPAND_IC}</h3>
+        ${rankingHTML}
+      </div>
+      <div class="panel" onclick="togglePanel(this)">
+        <h3><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21.2 15.9A10 10 0 1 1 8 2.8"/><path d="M22 12A10 10 0 0 0 12 2v10z"/></svg>Itens por faixa de dias parado${EXPAND_IC}</h3>
+        ${donutHTMLParados}
+      </div>
+    </div>
+    <div class="tablewrap" style="margin-top:14px">
+      <div class="scroll">
+        <table>
+          <thead><tr><th class="name">Item</th><th>Categoria</th><th>Dias parado</th><th>Valor imobilizado</th><th>Faixa</th></tr></thead>
+          <tbody>${rows}</tbody>
+        </table>
+      </div>
+      <div class="foot"><div>${itens.length} itens</div><div>Total: R$ ${valorTotal.toLocaleString('pt-BR')}</div></div>
+    </div>
+  `;
+}
+
 function viewEstoqueMatriz(){
-  const secAcuracia = secaoEstoqueHTML(1, 'var(--n4)', 'Acurácia de Estoque', 'contagens cíclicas mensais + inventário geral em dezembro',
-    [
-      { lbl:'Acurácia — Inventário Geral (dez)', icon:'<path d="M9 12l2 2 4-4"/><path d="M21 12c0 4.97-4.03 9-9 9s-9-4.03-9-9 4.03-9 9-9c1.66 0 3.22.45 4.56 1.24"/>' },
-      { lbl:'Acurácia média — cíclicos', icon:'<path d="M3 12a9 9 0 0 1 9-9 9 9 0 0 1 6.7 3M21 12a9 9 0 0 1-9 9 9 9 0 0 1-6.7-3"/>' },
-      { lbl:'Cobertura do ciclo', icon:'<path d="M21 8V5l-9-4-9 4v14l9 4 9-4"/><path d="M3.3 7 12 12l8.7-5M12 22V12"/>' },
-      { lbl:'Divergências (Inventário Geral)', icon:'<path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><path d="M12 9v4M12 17h.01"/>' },
-    ],
-    'Assim que a fonte for conectada, aqui entram: o gráfico de evolução mensal da acurácia (%) com a meta e o ponto do inventário geral de dezembro destacado, e a tabela mês a mês com contados, divergências e acurácia.'
-  );
-
-  const secGiro = secaoEstoqueHTML(2, 'var(--accent)', 'Giro de Estoque', 'velocidade de consumo por item',
-    [
-      { lbl:'Giro médio do período', icon:'<path d="M3 12a9 9 0 0 1 9-9 9 9 0 0 1 6.7 3M21 12a9 9 0 0 1-9 9 9 9 0 0 1-6.7-3"/>' },
-      { lbl:'Dias médios de estoque', icon:'<rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/>' },
-      { lbl:'Valor total em estoque', icon:'<path d="M21 8V5l-9-4-9 4v14l9 4 9-4"/><path d="M3.3 7 12 12l8.7-5M12 22V12"/>' },
-      { lbl:'CMV total no período', icon:'<path d="M3 3v18h18"/><path d="m19 9-5 5-4-4-3 3"/>' },
-    ],
-    'Assim que a fonte for conectada, aqui entram: o ranking de giro por item (vezes) com a linha de meta, e um donut classificando os itens em Alto/Médio/Baixo giro.'
-  );
-
-  const secParados = secaoEstoqueHTML(3, 'var(--n1)', 'Itens Parados', 'sem consumo há mais de 180 dias',
-    [
-      { lbl:'Itens parados (>180 dias)', icon:'<circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/>' },
-      { lbl:'Valor total imobilizado', icon:'<path d="M21 8V5l-9-4-9 4v14l9 4 9-4"/><path d="M3.3 7 12 12l8.7-5M12 22V12"/>' },
-      { lbl:'Itens críticos (>360 dias)', icon:'<path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><path d="M12 9v4M12 17h.01"/>' },
-      { lbl:'Item mais antigo parado', icon:'<rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/>' },
-    ],
-    'Assim que a fonte for conectada, aqui entram: o valor imobilizado por faixa de aging (Atenção 180-270d, Alto 270-360d, Crítico +360d), um donut de itens por faixa, e a tabela completa de itens parados (código, descrição, categoria, dias e valor).'
-  );
-
+  const D = DADOS_ESTOQUE_EXEMPLO;
   document.getElementById('view-root').innerHTML = `
     ${topBarHTML('Painéis da área', 'Estoque', null)}
-    ${secAcuracia}
+    <div class="empty-state" style="border:1px dashed var(--n2);color:var(--ink);margin-bottom:18px">
+      <b style="color:var(--n2)">Modelo com dados fictícios</b> — os números abaixo são só um exemplo de layout, ainda não vêm de nenhuma planilha real. Assim que você passar a fonte, eles são substituídos pelos dados de verdade, sem mudar o visual.
+    </div>
+    ${secaoAcuraciaHTML(D.acuracia)}
     <hr class="sec-sep">
-    ${secGiro}
+    ${secaoGiroHTML(D.giro)}
     <hr class="sec-sep">
-    ${secParados}
+    ${secaoParadosHTML(D.parados)}
   `;
+}
+
+/* =====================================================================
+   FROTA — checklist de inspeção veicular. Dados reais vêm do Apps
+   Script já publicado pelo app de inspeção (mesmo padrão do MI): POST
+   {action} devolve o JSON agregado direto, sem precisar do login do
+   painel gestor. Área operacional, sem KPI oficial atrelado na Matriz
+   de Metas (mesmo caso do Estoque).
+   ===================================================================== */
+const FROTA_API_URL = 'https://script.google.com/macros/s/AKfycbwB-8wP_LlvBdwBb_yaDmL_IM8QDWWn3zGbDUpUcLPTnTP-NHWzjSF3lYQj8ECl1U3j/exec';
+const FROTA_PAINEL_URL = 'https://inspecao-veicular-nu.vercel.app/gestor.html';
+const FROTA_ITEM_LABEL = {
+  crlv:'CRLV em dia', cnh:'CNH válida e categoria correta', antt:'ANTT / Autorização de transporte',
+  cert_taco:'Certificado de aferição do tacógrafo', cartao_despesas:'Cartão de despesas (Agillitas)',
+  cartao_abast:'Cartão abastecimento (Ticket Log)', tag_pedagio:'Tag pedágio', hospedagem:'Hospedagem (Onfly)',
+  extintor:'Extintor de incêndio (validade)', triangulo:'Triângulo de segurança', cinto:'Cintos de segurança',
+  tacografo:'Tacógrafo (funcionamento/lacre)', epi:'EPIs (colete, capacete, luva)',
+  oleo:'Nível de óleo do motor', agua:'Nível de água / arrefecimento', combustivel:'Nível de combustível',
+  bateria:'Bateria (carga e terminais)', vazamento:'Vazamentos (óleo, água, combustível)', correia:'Correia dentada / alternador',
+  pneus:'Pneus (desgaste e calibragem)', estepe:'Estepe + macaco + chave de roda', freios:'Sistema de freios (desgaste)',
+  freio_mao:'Freio de estacionamento', farois:'Faróis (alto, baixo e auxiliar)', lanternas:'Lanternas traseiras e luz de freio',
+  pisca:'Pisca-alerta e setas', luz_re:'Luz de ré e campainha de ré', painel_luzes:'Luzes de alerta no painel',
+  pneu_suspensao:'Suspensão (folgas e molas)', direcao:'Direção (folga e fluido)', lonas_grades:'Lonas e grades laterais',
+  cintas_amarracao:'Cintas e amarração de carga', lataria:'Lataria e estrutura (avarias)',
+  parabrisa:'Para-brisa (trincas/vidro)', vidros_lat:'Vidros laterais', retrovisor_int:'Retrovisor interno',
+  retrovisor_dir:'Retrovisor direito', retrovisor_esq:'Retrovisor esquerdo',
+};
+
+function frotaApi(action){
+  return fetch(FROTA_API_URL,{method:'POST',headers:{'Content-Type':'text/plain;charset=UTF-8'},body:JSON.stringify({action})}).then(r=>r.json());
+}
+function frotaParseDate(s){
+  if(!s) return null;
+  s = String(s).trim();
+  if(s.includes('T')){ const d = new Date(s); return isNaN(d.getTime())?null:d; }
+  if(s.includes('/')){
+    const p = s.split('/');
+    if(p.length>=3){ const yy = p[2].length===2?'20'+p[2]:p[2]; const d=new Date(+yy,+p[1]-1,+p[0]); return isNaN(d.getTime())?null:d; }
+  }
+  if(s.includes('-')){
+    const p = s.split('-');
+    if(p.length===3){ const d=new Date(+p[0],+p[1]-1,+p[2]); return isNaN(d.getTime())?null:d; }
+  }
+  return null;
+}
+function frotaFmtDate(s){
+  const d = frotaParseDate(s);
+  if(!d) return s||'—';
+  return d.toLocaleDateString('pt-BR',{day:'2-digit',month:'2-digit',year:'2-digit'});
+}
+function frotaScoreCor(sc){ return sc>=80?'var(--n4)':sc>=60?'var(--n2)':'var(--n1)'; }
+
+let dadosFrota = null;
+let dadosFrotaPromise = null;
+function getDadosFrota(){
+  if(dadosFrota) return Promise.resolve(dadosFrota);
+  if(!dadosFrotaPromise) dadosFrotaPromise = calcularDadosFrota().then(d=>{ dadosFrota = d; return d; });
+  return dadosFrotaPromise;
+}
+
+async function calcularDadosFrota(){
+  const [ri, rv] = await Promise.all([frotaApi('listarInspecoes'), frotaApi('listarVeiculos')]);
+  const inspecoes = (ri.inspecoes||[]).map(i=>({...i, _data: frotaParseDate(i.data)}))
+    .sort((a,b)=> (b._data?b._data.getTime():0) - (a._data?a._data.getTime():0));
+  const veiculos = rv.veiculos||[];
+
+  const hojeStr = frotaFmtDate(new Date().toISOString());
+  const placasHoje = new Set(inspecoes.filter(i=>frotaFmtDate(i.data)===hojeStr).map(i=>i.placa));
+  const pendentesHoje = veiculos.filter(v=>!placasHoje.has(v.placa));
+
+  const scores = inspecoes.map(i=>Number(i.score)||0);
+  const scoreMedio = scores.length ? scores.reduce((a,b)=>a+b,0)/scores.length : null;
+
+  const comNok = inspecoes.filter(i=> Object.values(i.items||{}).some(v=>v==='nao-conforme'));
+  const criticas = inspecoes.filter(i=> i.nokCriticos && i.nokCriticos.trim()!=='');
+
+  const nokCount = {};
+  inspecoes.forEach(i=>{
+    Object.entries(i.items||{}).forEach(([id,v])=>{ if(v==='nao-conforme') nokCount[id]=(nokCount[id]||0)+1; });
+  });
+  const nokRanking = Object.entries(nokCount).sort((a,b)=>b[1]-a[1]).slice(0,8)
+    .map(([id,count])=>({id, label: FROTA_ITEM_LABEL[id]||id, count}));
+
+  const porPlaca = {};
+  inspecoes.forEach(i=>{
+    if(!porPlaca[i.placa]) porPlaca[i.placa] = {soma:0, n:0};
+    porPlaca[i.placa].soma += Number(i.score)||0;
+    porPlaca[i.placa].n++;
+  });
+  const scorePorVeiculo = Object.entries(porPlaca).map(([placa,v])=>({placa, score: v.soma/v.n, n: v.n}))
+    .sort((a,b)=>a.score-b.score);
+
+  const porMes = {};
+  inspecoes.forEach(i=>{
+    if(!i._data) return;
+    const key = MESES_ORDEM[i._data.getMonth()];
+    if(!porMes[key]) porMes[key]={soma:0,n:0};
+    porMes[key].soma += Number(i.score)||0; porMes[key].n++;
+  });
+  const scoreMensal = MESES_ORDEM.map(m=> porMes[m] ? porMes[m].soma/porMes[m].n : null);
+
+  return { veiculos, inspecoes, placasHoje, pendentesHoje, scoreMedio, comNok, criticas, nokRanking, scorePorVeiculo, scoreMensal };
+}
+
+function frotaScoreLineSVG(scoreMensal){
+  const pts = scoreMensal.map((v,i)=>({i,v})).filter(p=>p.v!=null);
+  if(!pts.length) return '<div class="empty-state">Ainda sem histórico mensal de inspeções.</div>';
+  const w=1000,h=210,P={l:46,r:26,t:24,b:34};
+  const vals = pts.map(p=>p.v);
+  let lo = Math.min(...vals,60), hi = Math.max(...vals,100);
+  const pad = (hi-lo)*0.15||5; lo -= pad; hi += pad; if(hi>100) hi=102;
+  const span = Math.max(1, pts.length-1);
+  const x = idx => pts.length===1 ? w/2 : P.l + (idx/span)*(w-P.l-P.r);
+  const y = v => P.t + (hi-v)/((hi-lo)||1)*(h-P.t-P.b);
+
+  let grid = '';
+  for(let k=0;k<=3;k++){
+    const v = lo+(hi-lo)*k/3;
+    const yy = y(v);
+    grid += `<line x1="${P.l}" y1="${yy.toFixed(1)}" x2="${w-P.r}" y2="${yy.toFixed(1)}" stroke="var(--line-soft)" stroke-width="1"/>`;
+    grid += `<text x="${P.l-8}" y="${(yy+3.5).toFixed(1)}" text-anchor="end" fill="var(--ink-faint)" font-size="9.5">${v.toFixed(0)}%</text>`;
+  }
+  const labels = pts.map((p,idx)=>`<text x="${x(idx).toFixed(1)}" y="${h-10}" text-anchor="middle" fill="var(--ink-faint)" font-size="9.5">${MESES_ORDEM[p.i]}</text>`).join('');
+
+  let path='', area='';
+  if(pts.length>1){
+    path = pts.map((p,idx)=>`${idx===0?'M':'L'}${x(idx).toFixed(1)},${y(p.v).toFixed(1)}`).join(' ');
+    const areaBottom=(h-P.b).toFixed(1);
+    area = `${path} L${x(pts.length-1).toFixed(1)},${areaBottom} L${x(0).toFixed(1)},${areaBottom} Z`;
+  }
+  const dots = pts.map((p,idx)=>{
+    const cor = frotaScoreCor(p.v);
+    const isFirst=idx===0, isLast=idx===pts.length-1;
+    const anchor = pts.length===1 ? 'middle' : isFirst?'start':isLast?'end':'middle';
+    const lx = pts.length===1 ? x(idx) : isFirst?x(idx)+7:isLast?x(idx)-7:x(idx);
+    return `<circle cx="${x(idx).toFixed(1)}" cy="${y(p.v).toFixed(1)}" r="4" fill="${cor}" stroke="var(--panel)" stroke-width="1.5"/>
+      <text x="${lx.toFixed(1)}" y="${(y(p.v)-10).toFixed(1)}" text-anchor="${anchor}" fill="var(--ink)" font-size="9.5" font-weight="600">${p.v.toFixed(0)}%</text>`;
+  }).join('');
+
+  return `<svg viewBox="0 0 ${w} ${h}" style="width:100%;height:auto;display:block">
+    ${pts.length>1?`<defs><linearGradient id="frotaGrad" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="var(--accent)" stop-opacity=".28"/>
+      <stop offset="1" stop-color="var(--accent)" stop-opacity="0"/>
+    </linearGradient></defs>`:''}
+    ${grid}
+    ${area?`<path d="${area}" fill="url(#frotaGrad)"/>`:''}
+    ${path?`<path d="${path}" fill="none" stroke="var(--accent)" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round"/>`:''}
+    ${dots}
+    ${labels}
+  </svg>`;
+}
+
+function frotaNokRankingHTML(nokRanking){
+  if(!nokRanking.length) return '<div class="empty-state">Nenhum item reprovado no histórico.</div>';
+  const max = nokRanking[0].count;
+  return `<div class="funnel">${nokRanking.map(n=>`
+    <div class="row">
+      <div class="flabel" title="${n.label}">${n.label}</div>
+      <div class="ftrack"><div class="ffill" style="width:${Math.min(100,n.count/max*100)}%;background:var(--n1)"></div></div>
+      <div class="fval" style="color:var(--n1)">${n.count}x</div>
+    </div>`).join("")}</div>`;
+}
+
+function frotaScoreVeiculoHTML(scorePorVeiculo){
+  if(!scorePorVeiculo.length) return '<div class="empty-state">Sem inspeções registradas ainda.</div>';
+  return `<div class="funnel">${scorePorVeiculo.map(v=>{
+    const cor = frotaScoreCor(v.score);
+    return `<div class="row">
+      <div class="flabel" title="${v.placa}">${v.placa}</div>
+      <div class="ftrack"><div class="ffill" style="width:${Math.min(100,v.score)}%;background:${cor}"></div></div>
+      <div class="fval" style="color:${cor}">${v.score.toFixed(0)}%</div>
+    </div>`;
+  }).join("")}</div>`;
+}
+
+function frotaVeiculosStatusHTML(d){
+  if(!d.veiculos.length) return '<div class="empty-state">Nenhum veículo cadastrado ainda.</div>';
+  return `<div class="funnel">${d.veiculos.map(v=>{
+    const fez = d.placasHoje.has(v.placa);
+    const ult = d.inspecoes.find(i=>i.placa===v.placa);
+    const temNokHoje = fez && ult && Object.values(ult.items||{}).some(x=>x==='nao-conforme');
+    const status = !fez?'Pendente':temNokHoje?'NOK hoje':'OK hoje';
+    const cor = !fez?'var(--n2)':temNokHoje?'var(--n1)':'var(--n4)';
+    return `<div class="row">
+      <div class="flabel" title="${v.descricao||v.placa}">${v.placa}${v.descricao?` <span class="pend-tag" style="border-color:transparent;color:var(--ink-faint)">${v.descricao}</span>`:''}</div>
+      <div class="ftrack"><div class="ffill" style="width:${ult?Math.min(100,Number(ult.score)||0):0}%;background:${cor}"></div></div>
+      <div class="fval" style="color:${cor}">${status}</div>
+    </div>`;
+  }).join("")}</div>`;
+}
+
+function frotaTabelaInspecoes(inspecoes){
+  if(!inspecoes.length) return '<div class="empty-state">Nenhuma inspeção registrada ainda.</div>';
+  const rows = inspecoes.slice(0,15).map(i=>{
+    const nok = Object.values(i.items||{}).filter(v=>v==='nao-conforme').length;
+    const crit = i.nokCriticos && i.nokCriticos.trim()!=='';
+    const cor = frotaScoreCor(Number(i.score)||0);
+    return `<tr>
+      <td class="name">${i.placa}</td>
+      <td class="num dim">${frotaFmtDate(i.data)}</td>
+      <td class="num dim">${i.nome||i.email||'—'}</td>
+      <td class="num">${i.km?Number(i.km).toLocaleString('pt-BR')+' km':'—'}</td>
+      <td class="num" style="color:${cor};font-weight:700">${i.score}%</td>
+      <td class="num" style="color:${nok?'var(--n1)':'var(--n4)'}">${nok||'OK'}</td>
+      <td class="desemp" style="color:${crit?'var(--n1)':'var(--ink-faint)'}">${crit?'Crítico':'—'}</td>
+    </tr>`;
+  }).join("");
+  return `<div class="tablewrap" style="margin-top:14px">
+    <div class="scroll">
+      <table>
+        <thead><tr><th class="name">Placa</th><th>Data</th><th>Motorista</th><th>KM</th><th>Score</th><th>NOK</th><th>Crítico</th></tr></thead>
+        <tbody>${rows}</tbody>
+      </table>
+    </div>
+    <div class="foot"><div>${inspecoes.length} inspeções no histórico</div><div>Mostrando as ${Math.min(15,inspecoes.length)} mais recentes</div></div>
+  </div>`;
+}
+
+function frotaDashboardHTML(d){
+  const scoreCor = d.scoreMedio!=null ? frotaScoreCor(d.scoreMedio) : 'var(--accent)';
+  const kpiCards = [
+    { lbl:'Veículos na frota', val: d.veiculos.length.toString(), cor:'var(--accent)',
+      icon:'<path d="M10 17h4V5H2v12h3"/><path d="M20 17h2v-3.34a4 4 0 0 0-1.17-2.83L19 9h-5v8h1"/><circle cx="7.5" cy="17.5" r="2.5"/><circle cx="17.5" cy="17.5" r="2.5"/>' },
+    { lbl:'Inspecionados hoje', val: `${d.placasHoje.size}/${d.veiculos.length}`, cor: d.pendentesHoje.length?'var(--n2)':'var(--n4)',
+      icon:'<path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/>' },
+    { lbl:'Score médio', val: d.scoreMedio!=null?d.scoreMedio.toFixed(0)+'%':'–', cor: scoreCor,
+      icon:'<path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/>' },
+    { lbl:'Inspeções com NOK', val: d.comNok.length.toString(), cor:'var(--n1)',
+      icon:'<path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><path d="M12 9v4M12 17h.01"/>' },
+    { lbl:'Alertas críticos', val: d.criticas.length.toString(), cor:'#8a1f1f',
+      icon:'<path d="M18.63 13A17.89 17.89 0 0 1 18 8"/><path d="M6.26 6.26A5.86 5.86 0 0 0 6 8c0 7-3 9-3 9h14"/><path d="M18 8a6 6 0 0 0-9.33-5"/><path d="M17.73 17.73A17.9 17.9 0 0 1 12 20a17.9 17.9 0 0 1-8.5-2.5"/><path d="M1 1l22 22"/>' },
+  ];
+  const alertaPend = d.pendentesHoje.length ? `<div class="empty-state" style="border:1px dashed var(--n2);color:var(--ink);margin-bottom:18px">
+    <b style="color:var(--n2)">${d.pendentesHoje.length} veículo(s) sem inspeção hoje</b> — ${d.pendentesHoje.map(v=>v.placa).join(', ')}.
+  </div>` : '';
+  const alertaCritico = d.criticas.length ? `<div class="empty-state" style="border:1px dashed var(--n1);color:var(--ink);margin-bottom:18px">
+    <b style="color:var(--n1)">${d.criticas.length} inspeção(ões) com itens críticos</b> no histórico — verifique a tabela abaixo.
+  </div>` : '';
+  return `
+    ${alertaPend}${alertaCritico}
+    <div class="mi-kpis">
+      ${kpiCards.map(c=>`
+        <div class="mi-kpi" style="--bar:${c.cor}">
+          <div class="lbl"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${c.icon}</svg>${c.lbl}</div>
+          <div class="val">${c.val}</div>
+        </div>`).join("")}
+    </div>
+    <div class="panel" onclick="togglePanel(this)"><h3><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 3v18h18"/><path d="m19 9-5 5-4-4-3 3"/></svg>Evolução do score médio (mês a mês)${EXPAND_IC}</h3>${frotaScoreLineSVG(d.scoreMensal)}</div>
+    <div class="mi-panels-2">
+      <div class="panel" onclick="togglePanel(this)"><h3><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 21H4a1 1 0 0 1-1-1V3"/><path d="m5 15 4-4 3 3 5-6"/></svg>Itens que mais reprovam${EXPAND_IC}</h3>${frotaNokRankingHTML(d.nokRanking)}</div>
+      <div class="panel" onclick="togglePanel(this)"><h3><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 21H4a1 1 0 0 1-1-1V3"/><path d="m5 15 4-4 3 3 5-6"/></svg>Score por veículo${EXPAND_IC}</h3>${frotaScoreVeiculoHTML(d.scorePorVeiculo)}</div>
+    </div>
+    <div class="panel" onclick="togglePanel(this)"><h3><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10 17h4V5H2v12h3"/><path d="M20 17h2v-3.34a4 4 0 0 0-1.17-2.83L19 9h-5v8h1"/><circle cx="7.5" cy="17.5" r="2.5"/><circle cx="17.5" cy="17.5" r="2.5"/></svg>Situação da frota hoje${EXPAND_IC}</h3>${frotaVeiculosStatusHTML(d)}</div>
+    ${frotaTabelaInspecoes(d.inspecoes)}
+    <div class="foot-note">Dados calculados ao vivo a partir do checklist de inspeção veicular. <a href="${FROTA_PAINEL_URL}" target="_blank" style="color:var(--accent)">Abrir painel completo ↗</a></div>
+  `;
+}
+
+function viewFrota(){
+  document.getElementById('view-root').innerHTML = `
+    ${topBarHTML('Painéis da área', 'Frota', null)}
+    <div id="frota-dash">${dadosFrota ? frotaDashboardHTML(dadosFrota) : '<div class="mi-loading">Carregando dados da Frota…</div>'}</div>
+  `;
+  if(!dadosFrota){
+    getDadosFrota().then(d=>{
+      if(currentView === 'Frota'){
+        const el = document.getElementById('frota-dash');
+        if(el) el.innerHTML = frotaDashboardHTML(d);
+      }
+    }).catch(e=>{
+      console.error('Erro ao buscar dados de Frota:', e);
+      const el = document.getElementById('frota-dash');
+      if(el) el.innerHTML = '<div class="empty-state">Não foi possível carregar os dados agora. Tente novamente em instantes.</div>';
+    });
+  }
 }
 
 function renderCards(areas){
@@ -1426,6 +1969,7 @@ function areaIcon(area,small){
     "Manutenção Interna":`<path d="M14.7 6.3a4 4 0 0 0-5.4 5.4L3 18v3h3l6.3-6.3a4 4 0 0 0 5.4-5.4l-2.1 2.1-2-2 2.1-2.1z"/>`,
     "Filiais":`<path d="M21 8V5l-9-4-9 4v14l9 4 9-4"/><path d="M3.3 7 12 12l8.7-5M12 22V12"/>`,
     "Estoque":`<path d="M3 9h18M3 9v10a1 1 0 0 0 1 1h16a1 1 0 0 0 1-1V9M3 9l2-5h14l2 5"/><path d="M9 13h6"/>`,
+    "Frota":`<path d="M10 17h4V5H2v12h3"/><path d="M20 17h2v-3.34a4 4 0 0 0-1.17-2.83L19 9h-5v8h1"/><circle cx="7.5" cy="17.5" r="2.5"/><circle cx="17.5" cy="17.5" r="2.5"/>`,
     "Logística":`<path d="M1 3h15v13H1z"/><path d="M16 8h4l3 3v5h-7z"/><circle cx="5.5" cy="18.5" r="2.5"/><circle cx="18.5" cy="18.5" r="2.5"/>`,
   };
   return `<svg viewBox="0 0 24 24" ${s} fill="none" stroke="currentColor" stroke-width="2" style="vertical-align:-2px;margin-right:6px">${map[area]||""}</svg>`;
