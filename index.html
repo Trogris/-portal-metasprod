@@ -59,11 +59,6 @@
   .side.collapsed{width:72px;padding:18px 10px}
   .brand{display:flex;align-items:center;gap:8px;padding:6px 8px 18px}
   .side.collapsed .brand{padding:6px 0 18px;justify-content:center}
-  .brand .logo{
-    width:32px;height:32px;border-radius:8px;flex-shrink:0;
-    background:linear-gradient(135deg,var(--n4),#1f8f4e);
-    display:grid;place-items:center;color:#04160c;font-weight:800;font-size:15px;
-  }
   .brand-text{min-width:0}
   .side.collapsed .brand-text{display:none}
   .brand b{font-size:15px;letter-spacing:.2px;display:block}
@@ -125,10 +120,6 @@
     position:relative;overflow:hidden;
   }
   .card::before{content:"";position:absolute;left:0;top:0;bottom:0;width:3px;background:var(--bar,var(--accent))}
-  .card.clickable{cursor:pointer;transition:.15s}
-  .card.clickable:hover{border-color:var(--accent);transform:translateY(-1px)}
-  .card .open-hint{margin-left:auto;font-size:10px;color:var(--accent);display:flex;align-items:center;gap:3px}
-  .card .open-hint svg{width:10px;height:10px}
   .card .lbl{font-size:11px;color:var(--ink-dim);display:flex;align-items:center;gap:6px}
   .card .lbl svg{width:13px;height:13px}
   .card .val{font-size:24px;font-weight:700;margin-top:8px;font-variant-numeric:tabular-nums;letter-spacing:-.02em;display:flex;align-items:center;gap:8px}
@@ -163,26 +154,16 @@
     border-top:1px solid var(--line);border-bottom:1px solid var(--line);
     padding-top:11px;padding-bottom:11px;
   }
-  tr.group{cursor:pointer;user-select:none}
-  tr.group:hover td{filter:brightness(1.12)}
   tr.group td.name{
     font-weight:700;color:var(--ink);font-size:13.5px;
     border-left:3px solid var(--areacolor,var(--accent));
     display:flex;align-items:center;gap:9px;
   }
   tr.group td.name svg{width:15px;height:15px;color:var(--areacolor,var(--accent))}
-  .row-hint{margin-left:auto;font-size:10.5px;font-weight:500;color:var(--ink-faint)}
-  tr.group:hover .row-hint{color:var(--accent)}
   .num{color:var(--ink);font-weight:600}
   .num.dim{color:var(--ink-dim);font-weight:500}
   .desemp{font-weight:700}
   .pend-tag{margin-left:8px;font-size:9.5px;color:var(--ink-faint);border:1px solid var(--line);padding:1px 6px;border-radius:20px}
-  .link-btn{
-    margin-left:8px;font-size:10px;padding:2px 9px;border-radius:20px;
-    border:1px solid var(--accent);color:var(--accent);background:transparent;
-    cursor:pointer;font-weight:600;white-space:nowrap;
-  }
-  .link-btn:hover{background:var(--accent);color:#fff}
 
   .cell{
     display:inline-block;min-width:46px;padding:4px 6px;border-radius:6px;
@@ -201,35 +182,74 @@
 
   .foot-note{margin-top:16px;font-size:11px;color:var(--ink-faint);line-height:1.6}
 
-  /* ---------- Area page ---------- */
+  /* ---------- Area page (lançador de painéis) ---------- */
   .section-cap{font-size:11px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--ink-dim);margin:0 0 10px}
-  .dash-links{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px;margin-bottom:24px}
+  .dash-links{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:14px}
   .dash-card{
-    display:flex;align-items:center;gap:12px;
+    display:flex;align-items:center;gap:14px;
     background:linear-gradient(180deg,var(--panel-2),var(--panel));
-    border:1px solid var(--line);border-radius:12px;padding:14px 16px;
+    border:1px solid var(--line);border-radius:14px;padding:20px 22px;
     cursor:pointer;transition:.15s;
   }
-  .dash-card:hover{border-color:var(--accent);transform:translateY(-1px)}
+  .dash-card:hover{border-color:var(--accent);transform:translateY(-2px)}
   .dash-card .ic{
-    width:36px;height:36px;border-radius:9px;flex-shrink:0;
+    width:44px;height:44px;border-radius:11px;flex-shrink:0;
     background:color-mix(in srgb, var(--accent) 18%, transparent);
     display:grid;place-items:center;color:var(--accent);
   }
-  .dash-card .ic svg{width:18px;height:18px}
-  .dash-card .txt b{font-size:13px;display:block}
-  .dash-card .txt span{font-size:11px;color:var(--ink-dim)}
-
-  .kpi-cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:12px;margin-bottom:24px}
-  .kpi-card{
-    background:linear-gradient(180deg,var(--panel-2),var(--panel));
-    border:1px solid var(--line);border-radius:12px;padding:15px 17px;
+  .dash-card .ic svg{width:22px;height:22px}
+  .dash-card .txt b{font-size:14.5px;display:block}
+  .dash-card .txt span{font-size:11.5px;color:var(--ink-dim)}
+  .empty-state{
+    background:var(--panel);border:1px dashed var(--line);border-radius:14px;
+    padding:32px 24px;text-align:center;color:var(--ink-faint);font-size:13px;
   }
-  .kpi-card .nm{font-size:13px;font-weight:700;margin-bottom:10px}
-  .kpi-card .val-row{display:flex;align-items:baseline;gap:8px}
-  .kpi-card .valn{font-size:26px;font-weight:700;letter-spacing:-.02em}
-  .kpi-card .meta4{font-size:11px;color:var(--ink-faint);margin-top:6px}
-  .kpi-card .pend-block{font-size:12px;color:var(--ink-faint);padding:8px 0 2px}
+
+  /* ---------- Dashboard de Manutenção Interna ---------- */
+  .mi-kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px;margin-bottom:16px}
+  .mi-kpi{
+    background:linear-gradient(180deg,var(--panel-2),var(--panel));
+    border:1px solid var(--line);border-radius:12px;padding:14px 16px;
+  }
+  .mi-kpi .lbl{font-size:11px;color:var(--ink-dim)}
+  .mi-kpi .val{font-size:22px;font-weight:700;margin-top:8px;letter-spacing:-.02em;display:flex;align-items:center;gap:7px}
+  .mi-panels{display:grid;grid-template-columns:1.3fr 1fr;gap:14px;margin-bottom:14px}
+  .mi-panels-2{display:grid;grid-template-columns:1.3fr 1fr;gap:14px}
+  @media(max-width:900px){ .mi-panels,.mi-panels-2{grid-template-columns:1fr} }
+  .panel{
+    background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:18px 20px;
+  }
+  .panel h3{font-size:12.5px;font-weight:700;color:var(--ink-dim);margin-bottom:14px;text-transform:uppercase;letter-spacing:.04em}
+
+  .donut-wrap{display:flex;align-items:center;gap:22px;flex-wrap:wrap;justify-content:center}
+  .donut{width:130px;height:130px;border-radius:50%;flex-shrink:0;position:relative}
+  .donut::after{content:"";position:absolute;inset:24%;border-radius:50%;background:var(--panel)}
+  .donut-legend{display:flex;flex-direction:column;gap:8px}
+  .donut-legend .lg{display:flex;align-items:center;gap:8px;font-size:12px;color:var(--ink)}
+  .donut-legend .sw{width:11px;height:11px;border-radius:3px;flex-shrink:0}
+  .donut-legend .pct{font-weight:700;margin-left:auto;padding-left:14px}
+
+  .bars-mes{display:flex;align-items:flex-end;gap:10px;height:180px;overflow-x:auto;padding-top:8px}
+  .bars-mes .col{display:flex;flex-direction:column;align-items:center;justify-content:flex-end;height:100%;min-width:34px;flex-shrink:0}
+  .bars-mes .pair{display:flex;align-items:flex-end;gap:3px;height:100%}
+  .bars-mes .bar{width:11px;border-radius:3px 3px 0 0}
+  .bars-mes .bar.rec{background:var(--accent)}
+  .bars-mes .bar.suc{background:transparent;border:1.5px solid var(--accent);opacity:.55}
+  .bars-mes .mlabel{font-size:9.5px;color:var(--ink-faint);margin-top:6px;white-space:nowrap}
+  .bars-legend{display:flex;gap:16px;margin-top:12px;font-size:11px;color:var(--ink-dim)}
+  .bars-legend .lg{display:flex;align-items:center;gap:6px}
+  .bars-legend .sw{width:11px;height:11px;border-radius:3px}
+  .bars-legend .sw.suc{background:transparent;border:1.5px solid var(--accent)}
+  .bars-legend .sw.rec{background:var(--accent)}
+
+  .funnel{display:flex;flex-direction:column;gap:10px}
+  .funnel .row{display:flex;align-items:center;gap:10px}
+  .funnel .flabel{width:120px;font-size:11.5px;color:var(--ink-dim);flex-shrink:0}
+  .funnel .ftrack{flex:1;background:var(--panel-2);border-radius:5px;height:20px;overflow:hidden}
+  .funnel .ffill{height:100%;background:var(--accent);border-radius:5px}
+  .funnel .fval{width:60px;text-align:right;font-size:12px;font-weight:700;flex-shrink:0}
+
+  .mi-loading{padding:40px 0;text-align:center;color:var(--ink-faint);font-size:13px}
 
   @media(max-width:900px){
     .side{display:none}
@@ -242,7 +262,6 @@
 
   <aside class="side" id="sidebar">
     <div class="brand">
-      <div class="logo">F</div>
       <div class="brand-text">
         <b>Fiscaltech</b>
         <div class="brand-sub">Portal de Metas</div>
@@ -417,38 +436,26 @@ async function calcularAderenciaPrograma(){
 }
 
 /* =====================================================================
-   ESTOQUE MANUTENÇÃO (R$) — planilha "Custos - Manutenção Interna 2026",
-   compartilhada como "qualquer pessoa com o link" — lida direto via gviz
-   (não precisa de Apps Script: a planilha já é pública). Cada mês tem sua
-   própria aba ("Janeiro/2026"...) e o valor mora na coluna G, linha 2,
-   "Valor do Estoque".
+   MANUTENÇÃO INTERNA — os dados vêm de um Apps Script Web App (mesmo
+   padrão do Cronograma) que roda com a permissão do dono e lê por trás
+   a planilha "Custos - Manutenção Interna 2026". Só o JSON agregado sai
+   pra fora — a planilha em si pode ficar restrita, sem quebrar o Portal.
    ===================================================================== */
-const MI_SHEET_ID = '1Ay7TR1AvRqBGNEoekNB-r2a42dWZjutLX2rS5afKTB4';
-const MI_SHEET_URL = `https://docs.google.com/spreadsheets/d/${MI_SHEET_ID}/edit`;
-const MI_MESES_TABS = ["Janeiro/2026","Fevereiro/2026","Março/2026","Abril/2026","Maio/2026","Junho/2026","Julho/2026","Agosto/2026","Setembro/2026","Outubro/2026","Novembro/2026","Dezembro/2026"];
+const MI_SHEET_URL = 'https://docs.google.com/spreadsheets/d/1Ay7TR1AvRqBGNEoekNB-r2a42dWZjutLX2rS5afKTB4/edit';
+const MI_WEBAPP_URL = 'https://script.google.com/macros/s/AKfycbxWLJIvDG4l_9kLVx3BjJkxMgHlp9e7_Om1zvAdkiiaB-rkhONiHjpGt7as0Ip5Kdew/exec';
 
-async function fetchValorEstoqueMes(nomeAba){
-  const url = `https://docs.google.com/spreadsheets/d/${MI_SHEET_ID}/gviz/tq?tqx=out:json&sheet=${encodeURIComponent(nomeAba)}`;
-  const res = await fetch(url);
-  const text = await res.text();
-  const json = JSON.parse(text.slice(text.indexOf('{'), text.lastIndexOf('}')+1));
-  const cols = json.table.cols.map(c => (c.label||'').trim().toLowerCase());
-  const colIdx = cols.findIndex(c => c.startsWith('valor do estoque'));
-  if(colIdx === -1) return null; // aba desse mês ainda não existe na planilha
-  for(const row of json.table.rows){
-    const cell = row.c[colIdx];
-    if(cell && cell.v != null) return Number(cell.v);
-  }
-  return null;
+let dadosMI = null; // cache do resultado de calcularDadosMI(), preenchido no init()
+let dadosMIPromise = null; // evita disparar duas buscas em paralelo (init + navegação do usuário)
+function getDadosMI(){
+  if(dadosMI) return Promise.resolve(dadosMI);
+  if(!dadosMIPromise) dadosMIPromise = calcularDadosMI().then(d=>{ dadosMI = d; return d; });
+  return dadosMIPromise;
 }
 
-async function calcularEstoqueMI(){
-  const meses = await Promise.all(MI_MESES_TABS.map(nomeAba =>
-    fetchValorEstoqueMes(nomeAba).catch(()=>null)
-  ));
-  let atual = null;
-  for(let i=meses.length-1;i>=0;i--){ if(meses[i]!=null){ atual = meses[i]; break; } }
-  return { atual, meses };
+async function calcularDadosMI(){
+  const res = await fetch(MI_WEBAPP_URL+'?t='+Date.now());
+  if(!res.ok) throw new Error('HTTP '+res.status);
+  return await res.json();
 }
 
 /* ---------------------------------------------------------------------
@@ -462,11 +469,8 @@ function mesCell(v, kpi){
 function monthHeadCells(){ return MESES_ORDEM.map(m=>`<th>${m}</th>`).join(""); }
 function kpiRowHTML(k, nested){
   const n = nivel(k.atual,k);
-  const linkBtns = (k.links||[]).map(l=>
-    `<button class="link-btn" onclick="event.stopPropagation();window.open('${l.url}','_blank')">${l.label} ↗</button>`
-  ).join("");
   return `<tr>
-    <td class="name ${nested?'kpi-name':''}">${k.nome}${k.automatico?'':'<span class="pend-tag">pendente</span>'}${linkBtns}</td>
+    <td class="name ${nested?'kpi-name':''}">${k.nome}${k.automatico?'':'<span class="pend-tag">pendente</span>'}</td>
     <td class="num dim">${metaN4Texto(k)}</td>
     <td class="num">${fmt(k.atual,k.unidade)}</td>
     <td class="desemp" style="color:${corNivel(n)}">${n?n.toUpperCase():'–'}</td>
@@ -517,8 +521,8 @@ function render(){
 function viewGeral(){
   const resumoAreas = METAS.map(rollupArea);
   const rows = METAS.map(grp=>{
-    const gtr = `<tr class="group" style="--areacolor:${grp.cor}" onclick="setView('${grp.area}')">
-      <td class="name">${areaIcon(grp.area)}${grp.area}<span class="row-hint">ver área →</span></td>
+    const gtr = `<tr class="group" style="--areacolor:${grp.cor}">
+      <td class="name">${areaIcon(grp.area)}${grp.area}</td>
       <td class="num dim">—</td><td class="num dim">—</td><td class="num dim">—</td>
       ${MESES_ORDEM.map(()=>`<td></td>`).join("")}
     </tr>`;
@@ -538,7 +542,7 @@ function viewGeral(){
       <div class="foot">${legendHTML()}<div id="stamp"></div></div>
     </div>
     <div class="foot-note">
-      "Aderência à Programação" e "Estoque Manutenção (R$)" já buscam dado ao vivo direto das planilhas oficiais. Os demais indicadores da Matriz de Metas 2026 aparecem como <b>pendente</b> até a fonte de dados de cada área ser conectada da mesma forma. Clique em uma área (no menu, nos cards ou na tabela) pra ver os detalhes dela.
+      "Aderência à Programação" e "Estoque Manutenção (R$)" já buscam dado ao vivo direto das planilhas oficiais. Os demais indicadores da Matriz de Metas 2026 aparecem como <b>pendente</b> até a fonte de dados de cada área ser conectada da mesma forma. Os painéis completos de cada área ficam no menu à esquerda.
     </div>
   `;
   renderCards(resumoAreas);
@@ -549,19 +553,10 @@ function viewArea(area){
   const grp = METAS.find(m=>m.area===area);
   if(!grp){ currentView='geral'; return viewGeral(); }
 
-  const kpiCards = grp.kpis.map(k=>{
-    const n = nivel(k.atual,k);
-    return `<div class="kpi-card">
-      <div class="nm">${k.nome}${k.automatico?'':'<span class="pend-tag">pendente</span>'}</div>
-      ${k.atual!=null ? `
-        <div class="val-row"><span class="valn" style="color:${corNivel(n)}">${fmt(k.atual,k.unidade)}</span><span class="tier-badge" style="background:${corNivel(n)}">${n.toUpperCase()}</span></div>
-        <div class="meta4">Meta N4: ${metaN4Texto(k)}</div>
-      ` : `<div class="pend-block">Aguardando conexão de dados · meta N4: ${metaN4Texto(k)}</div>`}
-    </div>`;
-  }).join("");
+  if(area === 'Manutenção Interna') return viewManutencaoInterna(grp);
 
   const allLinks = grp.kpis.flatMap(k=>k.links||[]);
-  const dashHTML = allLinks.length ? `
+  const body = allLinks.length ? `
     <div class="section-cap">Painéis conectados</div>
     <div class="dash-links">
       ${allLinks.map(l=>`
@@ -570,35 +565,128 @@ function viewArea(area){
           <div class="txt"><b>${l.label}</b><span>Abrir painel completo ↗</span></div>
         </div>
       `).join("")}
-    </div>` : "";
-
-  const rows = grp.kpis.map(k=>kpiRowHTML(k,false)).join("");
+    </div>` : `<div class="empty-state">Nenhum painel conectado ainda para ${area}. O indicador mês a mês continua disponível na Visão consolidada.</div>`;
 
   document.getElementById('view-root').innerHTML = `
-    ${topBarHTML('Indicadores de área', area, null)}
-    <div class="section-cap">Indicadores</div>
-    <div class="kpi-cards">${kpiCards}</div>
-    ${dashHTML}
-    <div class="section-cap">Detalhe mensal — jan a dez</div>
-    <div class="tablewrap">
-      <div class="scroll">
-        <table>
-          <thead><tr><th class="name">Meta</th><th>Meta (N4)</th><th>Atual</th><th>Nível</th>${monthHeadCells()}</tr></thead>
-          <tbody>${rows}</tbody>
-        </table>
-      </div>
-      <div class="foot">${legendHTML()}<div id="stamp"></div></div>
-    </div>
+    ${topBarHTML('Painéis da área', area, null)}
+    ${body}
   `;
-  setStamp();
+}
+
+/* ---------------------------------------------------------------------
+   Dashboard de Manutenção Interna (reconstrução do painel Power BI)
+   --------------------------------------------------------------------- */
+function fmtGrande(v){
+  if(v==null) return '–';
+  if(Math.abs(v)>=1000000) return 'R$ '+(v/1000000).toLocaleString('pt-BR',{maximumFractionDigits:2})+' Mi';
+  return 'R$ '+Math.round(v/1000).toLocaleString('pt-BR')+' Mil';
+}
+function donutHTML(nRec,nSuc,nEnv){
+  const total = nRec+nSuc+nEnv || 1;
+  const pRec = nRec/total*100, pSuc = nSuc/total*100, pEnv = nEnv/total*100;
+  const c1 = pRec, c2 = c1+pSuc;
+  return `<div class="donut-wrap">
+    <div class="donut" style="background:conic-gradient(var(--accent) 0% ${c1}%, var(--n2) ${c1}% ${c2}%, var(--ink-faint) ${c2}% 100%)"></div>
+    <div class="donut-legend">
+      <div class="lg"><span class="sw" style="background:var(--accent)"></span>Peças Reparadas<span class="pct">${pRec.toFixed(0)}%</span></div>
+      <div class="lg"><span class="sw" style="background:var(--n2)"></span>Peças Sucateadas<span class="pct">${pSuc.toFixed(0)}%</span></div>
+      <div class="lg"><span class="sw" style="background:var(--ink-faint)"></span>Enviadas p/ Manut. Externa<span class="pct">${pEnv.toFixed(0)}%</span></div>
+    </div>
+  </div>`;
+}
+function barsMesHTML(serie){
+  if(!serie.length) return '<div class="empty-state">Sem histórico mensal disponível.</div>';
+  const max = Math.max(...serie.flatMap(m=>[m.rec,m.suc]), 1);
+  const cols = serie.map(m=>`
+    <div class="col">
+      <div class="pair">
+        <div class="bar rec" style="height:${Math.max(2,m.rec/max*100)}%" title="Recuperado: ${fmtGrande(m.rec)}"></div>
+        <div class="bar suc" style="height:${Math.max(2,m.suc/max*100)}%" title="Sucateado: ${fmtGrande(m.suc)}"></div>
+      </div>
+      <div class="mlabel">${m.label}</div>
+    </div>`).join("");
+  return `<div class="bars-mes">${cols}</div>
+    <div class="bars-legend">
+      <span class="lg"><span class="sw rec"></span>Recuperado (R$)</span>
+      <span class="lg"><span class="sw suc"></span>Sucateado (R$)</span>
+    </div>`;
+}
+function funnelHTML(total,nRec,nSuc,nEnv){
+  const rows = [
+    {label:'Total avaliado', val: total},
+    {label:'Reparadas', val: nRec},
+    {label:'Sucateadas', val: nSuc},
+    {label:'Enviadas MN', val: nEnv},
+  ];
+  return `<div class="funnel">${rows.map(r=>`
+    <div class="row">
+      <div class="flabel">${r.label}</div>
+      <div class="ftrack"><div class="ffill" style="width:${total?(r.val/total*100):0}%"></div></div>
+      <div class="fval">${r.val.toLocaleString('pt-BR')}</div>
+    </div>`).join("")}</div>`;
+}
+function sparklineSVG(meses){
+  const pts = meses.map((v,i)=>({i,v})).filter(p=>p.v!=null);
+  if(!pts.length) return '<div class="empty-state">Ainda sem histórico mensal do saldo.</div>';
+  const w=560,h=160,pad=28;
+  const max = Math.max(...pts.map(p=>p.v))*1.15 || 1;
+  const x = i => pad + (i/11)*(w-2*pad);
+  const y = v => h-pad - (v/max)*(h-2*pad-14);
+  const path = pts.map((p,idx)=>`${idx===0?'M':'L'}${x(p.i).toFixed(1)},${y(p.v).toFixed(1)}`).join(' ');
+  const dots = pts.map(p=>`<circle cx="${x(p.i).toFixed(1)}" cy="${y(p.v).toFixed(1)}" r="3.5" fill="var(--accent)"/>`).join('');
+  const labels = MESES_ORDEM.map((m,i)=>`<text x="${x(i).toFixed(1)}" y="${h-6}" font-size="9.5" fill="var(--ink-faint)" text-anchor="middle">${m}</text>`).join('');
+  return `<svg viewBox="0 0 ${w} ${h}" style="width:100%;height:auto;max-height:180px">
+    <path d="${path}" fill="none" stroke="var(--accent)" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round"/>
+    ${dots}${labels}
+  </svg>`;
+}
+function miDashboardHTML(grp, d){
+  const kpiEstoque = grp.kpis[0];
+  const n = nivel(kpiEstoque.atual, kpiEstoque);
+  return `
+    <div class="mi-kpis">
+      <div class="mi-kpi"><div class="lbl">Peças avaliadas</div><div class="val">${d.totalPecas.toLocaleString('pt-BR')}</div></div>
+      <div class="mi-kpi"><div class="lbl">Índice de Recuperação (R$)</div><div class="val">${d.indiceRecuperacao!=null?d.indiceRecuperacao.toFixed(0)+'%':'–'}</div></div>
+      <div class="mi-kpi"><div class="lbl">Valor Recuperado</div><div class="val">${fmtGrande(d.totRec)}</div></div>
+      <div class="mi-kpi"><div class="lbl">Valor Sucateado</div><div class="val">${fmtGrande(d.totSuc)}</div></div>
+      <div class="mi-kpi"><div class="lbl">Saldo Armazém MI</div><div class="val">${fmt(kpiEstoque.atual,'R$')}${n?` <span class="tier-badge" style="background:${corNivel(n)}">${n.toUpperCase()}</span>`:''}</div></div>
+    </div>
+    <div class="mi-panels">
+      <div class="panel"><h3>Saldo Armazém MI (R$) — mês a mês, 2026</h3>${sparklineSVG(kpiEstoque.meses)}</div>
+      <div class="panel"><h3>Destinação das peças</h3>${donutHTML(d.nRec,d.nSuc,d.nEnv)}</div>
+    </div>
+    <div class="mi-panels-2">
+      <div class="panel"><h3>Peças recuperadas vs sucateadas (R$) — 2026</h3>${barsMesHTML(d.serieMensal)}</div>
+      <div class="panel"><h3>Peças avaliadas por categoria</h3>${funnelHTML(d.totalPecas,d.nRec,d.nSuc,d.nEnv)}</div>
+    </div>
+    <div class="foot-note">Dados calculados ao vivo a partir das abas mensais da planilha "Custos - Manutenção Interna 2026" (peça a peça + saldo do armazém). <a href="${MI_SHEET_URL}" target="_blank" style="color:var(--accent)">Abrir planilha completa ↗</a></div>
+  `;
+}
+function viewManutencaoInterna(grp){
+  document.getElementById('view-root').innerHTML = `
+    ${topBarHTML('Painéis da área', 'Manutenção Interna', null)}
+    <div id="mi-dash">${dadosMI ? miDashboardHTML(grp, dadosMI) : '<div class="mi-loading">Carregando dados da Manutenção Interna…</div>'}</div>
+  `;
+  if(!dadosMI){
+    getDadosMI().then(d=>{
+      if(currentView === 'Manutenção Interna'){
+        const el = document.getElementById('mi-dash');
+        if(el) el.innerHTML = miDashboardHTML(grp, d);
+      }
+    }).catch(e=>{
+      console.error('Erro ao buscar dados de Manutenção Interna:', e);
+      const el = document.getElementById('mi-dash');
+      if(el) el.innerHTML = '<div class="empty-state">Não foi possível carregar os dados agora. Tente novamente em instantes.</div>';
+    });
+  }
 }
 
 function renderCards(areas){
   const el = document.getElementById("cards");
   if(!el) return;
   el.innerHTML = areas.map(a=>`
-    <div class="card clickable" style="--bar:${a.cor}" onclick="setView('${a.area}')">
-      <div class="lbl">${areaIcon(a.area,true)}${a.area}<span class="open-hint"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="7" y1="17" x2="17" y2="7"/><polyline points="7 7 17 7 17 17"/></svg>ver área</span></div>
+    <div class="card" style="--bar:${a.cor}">
+      <div class="lbl">${areaIcon(a.area,true)}${a.area}</div>
       <div class="val">
         ${a.nivel ? `${fmt(a.kpiRef.atual,a.kpiRef.unidade)} <span class="tier-badge" style="background:${corNivel(a.nivel)}">${a.nivel.toUpperCase()}</span>` : `<span style="font-size:14px;color:var(--ink-faint);font-weight:500">Pendente</span>`}
       </div>
@@ -629,12 +717,12 @@ async function init(){
     render();
   }).catch(e=>console.error('Erro ao buscar Aderência à Programação:', e));
 
-  calcularEstoqueMI().then(({atual,meses})=>{
+  getDadosMI().then(d=>{
     const kpi = METAS[1].kpis[0];
-    kpi.atual = atual;
-    kpi.meses = meses;
+    kpi.atual = d.estoque.atual;
+    kpi.meses = d.estoque.meses;
     render();
-  }).catch(e=>console.error('Erro ao buscar Estoque Manutenção (R$):', e));
+  }).catch(e=>console.error('Erro ao buscar dados de Manutenção Interna:', e));
 }
 init();
 </script>
