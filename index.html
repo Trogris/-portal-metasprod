@@ -718,6 +718,7 @@ async function calcularDadosFiliais(){
     b.excPct = b.objetivo>0 ? b.excesso/b.objetivo*100 : null;
     const d = mesAtualDados ? mesAtualDados.porBase[b.base] : null;
     b.ns = (d && d.atendimento!=null) ? d.atendimento*100 : null; // acuracidade/atendimento da base, mês mais recente
+    b.rupturaBase = (d && d.ruptura!=null) ? d.ruptura*100 : null; // ruptura da base, mês mais recente — indicador oficial
   });
 
   // série histórica real da rede (média simples entre bases, por mês) — alimenta o KPI oficial mês a mês
@@ -1336,7 +1337,8 @@ function labelBaseParaMapa(bs){
   const prefixos = [...new Set(bs.map(b=>b.base.replace('Base ','').split(' - ')[0].trim()))];
   return prefixos.length===1 ? prefixos[0] : bs.map(b=>b.base.replace('Base ','')).join(' / ');
 }
-function mapaBrasilHTML(bases, kpi){
+function mapaBrasilHTML(bases, kpi, valorFn){
+  valorFn = valorFn || (b=>b.ns);
   const porUF = {};
   bases.forEach(b=>{ if(b.uf){ (porUF[b.uf]=porUF[b.uf]||[]).push(b); } });
   const ordem = {n1:1,n2:2,n3:3,n4:4};
@@ -1346,7 +1348,7 @@ function mapaBrasilHTML(bases, kpi){
     const bs = porUF[uf];
     let fill = 'var(--line)', op = 0.5;
     if(bs){
-      const niveis = bs.map(b=>nivel(b.ns,kpi)).filter(Boolean);
+      const niveis = bs.map(b=>nivel(valorFn(b),kpi)).filter(Boolean);
       const pior = niveis.length ? niveis.reduce((a,b2)=>ordem[a]<=ordem[b2]?a:b2) : null;
       fill = pior ? corNivel(pior) : 'var(--ink-faint)';
       op = 0.92;
@@ -1370,7 +1372,8 @@ function mapaBrasilHTML(bases, kpi){
     <div class="map-tip" id="map-tip"></div>
   </div>`;
 }
-function initMapTooltip(d, kpi){
+function initMapTooltip(d, kpi, valorFn){
+  valorFn = valorFn || (b=>b.ns);
   const map = document.getElementById('brmap');
   const tip = document.getElementById('map-tip');
   if(!map || !tip) return;
@@ -1381,8 +1384,10 @@ function initMapTooltip(d, kpi){
       const uf = p.dataset.uf, bs = porUF[uf];
       const nomeEstado = BR_STATES[uf] ? BR_STATES[uf].estado : uf;
       tip.innerHTML = `<b>${nomeEstado} (${uf})</b>` + bs.map(b=>{
-        const n = nivel(b.ns,kpi);
-        return `<div class="r"><span>${b.base.replace('Base ','')}</span><b style="color:${n?corNivel(n):'var(--ink-faint)'}">${b.ns!=null?b.ns.toFixed(1)+'%':'–'}${n?' · '+n.toUpperCase():''}</b></div>`;
+        const val = valorFn(b);
+        const n = nivel(val,kpi);
+        return `<div class="r"><span>${b.base.replace('Base ','')}</span><b style="color:${n?corNivel(n):'var(--ink-faint)'}">${val!=null?val.toFixed(1)+'%':'–'}${n?' · '+n.toUpperCase():''}</b></div>
+          <div class="r" style="opacity:.7;font-size:10.5px"><span>Atendimento</span><span>${b.ns!=null?b.ns.toFixed(1)+'%':'–'}</span></div>`;
       }).join('');
       const r = map.getBoundingClientRect();
       let x = e.clientX - r.left + 14, y = e.clientY - r.top + 14;
@@ -1396,40 +1401,43 @@ function filiaisDashboardHTML(grp, d){
   const kpiAcur = KPI_ACURACIDADE_FILIAL, kpiRupt = grp.kpis[0];
   const nAcur = nivel(d.acuracidade, kpiAcur);
   const nRupt = nivel(d.ruptura, kpiRupt);
-  const dentroMeta = d.bases.filter(b=>nivel(b.ns,kpiAcur)==='n4').length;
+  const dentroMeta = d.bases.filter(b=>nivel(b.rupturaBase,kpiRupt)==='n4').length;
   const excMed = d.bases.length ? d.bases.reduce((s,b)=>s+(b.excPct||0),0)/d.bases.length : null;
 
   const kpiCards = [
-    { lbl:'Acuracidade do Estoque (rede)', val: d.acuracidade!=null?d.acuracidade.toFixed(1)+'%':'–', badge:nAcur, cor: nAcur?corNivel(nAcur):'var(--accent)',
-      icon:'<path d="M21 8V5a1 1 0 0 0-.5-.87l-7.5-4.3a2 2 0 0 0-2 0L3.5 4.13A1 1 0 0 0 3 5v14a1 1 0 0 0 .5.87l7.5 4.3a2 2 0 0 0 2 0"/><path d="M3.3 7 12 12l8.7-5M12 22V12"/>' },
-    { lbl:'Bases dentro da meta', val:`${dentroMeta}/${d.bases.length}`, cor:'var(--n4)',
-      icon:'<path d="M3 21V7l9-4 9 4v14"/><path d="M3 21h18"/>' },
     { lbl:'Ruptura de Estoque (rede)', val: d.ruptura!=null?d.ruptura.toFixed(1)+'%':'–', badge:nRupt, cor: nRupt?corNivel(nRupt):'var(--accent)',
       icon:'<circle cx="12" cy="12" r="10"/><path d="M12 8v4M12 16h.01"/>' },
+    { lbl:'Bases dentro da meta', val:`${dentroMeta}/${d.bases.length}`, cor:'var(--n4)',
+      icon:'<path d="M3 21V7l9-4 9 4v14"/><path d="M3 21h18"/>' },
+    { lbl:'Acuracidade do Estoque (rede)', val: d.acuracidade!=null?d.acuracidade.toFixed(1)+'%':'–', badge:nAcur, cor: nAcur?corNivel(nAcur):'var(--accent)',
+      icon:'<path d="M21 8V5a1 1 0 0 0-.5-.87l-7.5-4.3a2 2 0 0 0-2 0L3.5 4.13A1 1 0 0 0 3 5v14a1 1 0 0 0 .5.87l7.5 4.3a2 2 0 0 0 2 0"/><path d="M3.3 7 12 12l8.7-5M12 22V12"/>' },
     { lbl:'Excesso de estoque médio', val: excMed!=null?excMed.toFixed(1)+'%':'–', cor:'var(--n2)',
       icon:'<path d="M21 8V5l-9-4-9 4v14l9 4 9-4"/><path d="M3.3 7 12 12l8.7-5M12 22V12"/>' },
   ];
 
-  const rankingRows = [...d.bases].sort((a,b)=>(b.ns||0)-(a.ns||0));
+  // pior primeiro (maior ruptura no topo) — mesma convenção usada no ranking de projetos da Produção
+  const maxRuptura = Math.max(...d.bases.map(b=>b.rupturaBase||0), 1);
+  const rankingRows = [...d.bases].sort((a,b)=>(b.rupturaBase||0)-(a.rupturaBase||0));
   const rankingHTML = `<div class="funnel">${rankingRows.map(b=>{
-    const n = nivel(b.ns,kpiAcur);
+    const n = nivel(b.rupturaBase,kpiRupt);
     const cor = n?corNivel(n):'var(--ink-faint)';
     return `<div class="row">
       <div class="flabel">${b.base.replace('Base ','')}</div>
-      <div class="ftrack"><div class="ffill" style="width:${b.ns!=null?Math.min(100,b.ns):0}%;background:${cor}"></div></div>
-      <div class="fval" style="color:${cor}">${b.ns!=null?b.ns.toFixed(1)+'%':'–'}</div>
+      <div class="ftrack"><div class="ffill" style="width:${b.rupturaBase!=null?Math.min(100,b.rupturaBase/maxRuptura*100):0}%;background:${cor}"></div></div>
+      <div class="fval" style="color:${cor}">${b.rupturaBase!=null?b.rupturaBase.toFixed(1)+'%':'–'}</div>
     </div>`;
   }).join("")}</div>`;
 
-  const tableRows = [...d.bases].sort((a,b)=>(a.ns==null?999:a.ns)-(b.ns==null?999:b.ns)).map(b=>{
-    const n = nivel(b.ns,kpiAcur);
+  const tableRows = [...d.bases].sort((a,b)=>(b.rupturaBase==null?-1:b.rupturaBase)-(a.rupturaBase==null?-1:a.rupturaBase)).map(b=>{
+    const n = nivel(b.rupturaBase,kpiRupt);
     const cor = n?corNivel(n):'var(--ink-faint)';
     const corExc = b.excPct==null?'var(--ink-faint)':b.excPct>15?'var(--n1)':b.excPct>8?'var(--n2)':'var(--ink)';
     return `<tr>
       <td class="name">${b.base}</td>
       <td class="num dim">${b.uf||'—'}</td>
-      <td class="num" style="color:${cor};font-weight:700">${b.ns!=null?b.ns.toFixed(1)+'%':'–'}</td>
+      <td class="num" style="color:${cor};font-weight:700">${b.rupturaBase!=null?b.rupturaBase.toFixed(1)+'%':'–'}</td>
       <td class="desemp" style="color:${cor}">${n?n.toUpperCase():'–'}</td>
+      <td class="num dim">${b.ns!=null?b.ns.toFixed(1)+'%':'–'}</td>
       <td class="num">${b.pend.toLocaleString('pt-BR')}</td>
       <td class="num" style="color:${corExc}">${b.excPct!=null?b.excPct.toFixed(1)+'%':'–'}</td>
     </tr>`;
@@ -1444,13 +1452,13 @@ function filiaisDashboardHTML(grp, d){
         </div>`).join("")}
     </div>
     <div class="mi-panels">
-      <div class="panel" onclick="togglePanel(this)"><h3><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 20l-5.5 2.5V6L9 3.5m0 16.5 6 2.5m-6-2.5V3.5m6 19 5.5-2.5V3L15 5.5m0 17V5.5m0 0L9 3.5"/></svg>Acuracidade por base (mapa)${EXPAND_IC}</h3>${mapaBrasilHTML(d.bases,kpiAcur)}</div>
-      <div class="panel" onclick="togglePanel(this)"><h3><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 3v18h18"/><rect x="7" y="10" width="3" height="8"/><rect x="12" y="6" width="3" height="12"/><rect x="17" y="13" width="3" height="5"/></svg>Ranking de bases${EXPAND_IC}</h3>${rankingHTML}</div>
+      <div class="panel" onclick="togglePanel(this)"><h3><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 20l-5.5 2.5V6L9 3.5m0 16.5 6 2.5m-6-2.5V3.5m6 19 5.5-2.5V3L15 5.5m0 17V5.5m0 0L9 3.5"/></svg>Ruptura por base (mapa)${EXPAND_IC}</h3>${mapaBrasilHTML(d.bases,kpiRupt,b=>b.rupturaBase)}</div>
+      <div class="panel" onclick="togglePanel(this)"><h3><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 3v18h18"/><rect x="7" y="10" width="3" height="8"/><rect x="12" y="6" width="3" height="12"/><rect x="17" y="13" width="3" height="5"/></svg>Ranking de bases (ruptura)${EXPAND_IC}</h3>${rankingHTML}</div>
     </div>
     <div class="tablewrap">
       <div class="scroll">
         <table>
-          <thead><tr><th class="name">Base</th><th>UF</th><th>Acuracidade</th><th>Nível</th><th>Pendência (un.)</th><th>Excesso</th></tr></thead>
+          <thead><tr><th class="name">Base</th><th>UF</th><th>Ruptura</th><th>Nível</th><th>Atendimento</th><th>Pendência (un.)</th><th>Excesso</th></tr></thead>
           <tbody>${tableRows}</tbody>
         </table>
       </div>
@@ -1464,12 +1472,12 @@ function viewFiliais(grp){
     ${topBarHTML('Painéis da área', 'Filiais', null)}
     <div id="filiais-dash">${dadosFiliais ? filiaisDashboardHTML(grp, dadosFiliais) : '<div class="mi-loading">Carregando dados das filiais…</div>'}</div>
   `;
-  if(dadosFiliais) initMapTooltip(dadosFiliais, KPI_ACURACIDADE_FILIAL);
+  if(dadosFiliais) initMapTooltip(dadosFiliais, grp.kpis[0], b=>b.rupturaBase);
   if(!dadosFiliais){
     getDadosFiliais().then(d=>{
       if(currentView === 'Filiais'){
         const el = document.getElementById('filiais-dash');
-        if(el){ el.innerHTML = filiaisDashboardHTML(grp, d); initMapTooltip(d, KPI_ACURACIDADE_FILIAL); }
+        if(el){ el.innerHTML = filiaisDashboardHTML(grp, d); initMapTooltip(d, grp.kpis[0], b=>b.rupturaBase); }
       }
     }).catch(e=>{
       console.error('Erro ao buscar dados das Filiais:', e);
