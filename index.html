@@ -659,24 +659,34 @@ async function fetchGvizJSON(sheetId, nomeAba){
   return JSON.parse(text.slice(text.indexOf('{'), text.lastIndexOf('}')+1));
 }
 
+const MES_NOME_IDX_FILIAIS = {janeiro:0,fevereiro:1,'março':2,abril:3,maio:4,junho:5,julho:6,agosto:7,setembro:8,outubro:9,novembro:10,dezembro:11};
+function parseMesAnoFiliais(s){
+  const partes = String(s).toLowerCase().split('/');
+  const idx = MES_NOME_IDX_FILIAIS[(partes[0]||'').trim()];
+  if(idx==null) return null;
+  const anoStr = (partes[1]||'').trim();
+  const ano = anoStr ? (anoStr.length===2 ? 2000+parseInt(anoStr,10) : parseInt(anoStr,10)) : 0;
+  return { idx, chave: ano*12+idx };
+}
+
 async function calcularDadosFiliais(){
-  const [resumoJson, excessoJson] = await Promise.all([
+  const [resumoJson, excessoJson, mensalJson] = await Promise.all([
     fetchGvizJSON(FILIAIS_SHEET_ID, 'Resumo por Base'),
     fetchGvizJSON(FILIAIS_SHEET_ID, 'Excesso de Estoque'),
+    fetchGvizJSON(FILIAIS_SHEET_ID, 'Resumo Mensal'),
   ]);
   const numv = c => (c && typeof c.v === 'number') ? c.v : null;
   const strv = c => (c && c.v != null) ? String(c.v) : null;
 
+  // "Resumo por Base": Base, % Atendimento, Ruptura %, Nível, SKUs na Meta, SKUs Total, Pendência Total.
+  // Continua alimentando objetivo (SKUs Total, só serve de referência pro % de excesso) e pendência —
+  // a acurácia/ruptura em si agora vem da aba "Resumo Mensal" (média real por semana, calculada pelo script do usuário).
   const bases = [];
   (resumoJson.table.rows||[]).forEach(row=>{
     if(!row.c) return;
     const nome = strv(row.c[0]);
     if(!nome) return;
-    bases.push({
-      base: nome, uf: BASE_UF[nome]||null,
-      objetivo: numv(row.c[1])||0, fisico: numv(row.c[2])||0, pend: numv(row.c[3])||0,
-      excesso: 0,
-    });
+    bases.push({ base: nome, uf: BASE_UF[nome]||null, objetivo: numv(row.c[5])||0, pend: numv(row.c[6])||0, excesso: 0 });
   });
 
   const excPorBase = {};
@@ -688,19 +698,44 @@ async function calcularDadosFiliais(){
     excPorBase[nome] = (excPorBase[nome]||0) + exc;
   });
 
-  let totObjetivo=0, totFisico=0, totPend=0;
+  // "Resumo Mensal": Mês, Base, % Atendimento (média), Ruptura % (média), Nível, Semanas
+  const porMes = {}; // chave (ano*12+mês) -> { idx, porBase:{nome:{atendimento,ruptura}} }
+  (mensalJson.table.rows||[]).forEach(row=>{
+    if(!row.c) return;
+    const mesStr = strv(row.c[0]), nome = strv(row.c[1]);
+    if(!mesStr || !nome) return;
+    const m = parseMesAnoFiliais(mesStr);
+    if(!m) return;
+    if(!porMes[m.chave]) porMes[m.chave] = { idx: m.idx, porBase:{} };
+    porMes[m.chave].porBase[nome] = { atendimento: numv(row.c[2]), ruptura: numv(row.c[3]) };
+  });
+  const chaves = Object.keys(porMes).map(Number).sort((a,b)=>a-b);
+  const chaveAtual = chaves.length ? chaves[chaves.length-1] : null;
+  const mesAtualDados = chaveAtual!=null ? porMes[chaveAtual] : null;
+
   bases.forEach(b=>{
     b.excesso = excPorBase[b.base] || 0;
-    b.ns = b.objetivo>0 ? b.fisico/b.objetivo*100 : null; // nível de serviço = acuracidade da base
     b.excPct = b.objetivo>0 ? b.excesso/b.objetivo*100 : null;
-    totObjetivo += b.objetivo; totFisico += b.fisico; totPend += b.pend;
+    const d = mesAtualDados ? mesAtualDados.porBase[b.base] : null;
+    b.ns = (d && d.atendimento!=null) ? d.atendimento*100 : null; // acuracidade/atendimento da base, mês mais recente
+  });
+
+  // série histórica real da rede (média simples entre bases, por mês) — alimenta o KPI oficial mês a mês
+  const acuraciaMensal = Array(12).fill(null), rupturaMensal = Array(12).fill(null);
+  chaves.forEach(ch=>{
+    const vals = Object.values(porMes[ch].porBase);
+    const atd = vals.map(v=>v.atendimento).filter(v=>v!=null);
+    const rup = vals.map(v=>v.ruptura).filter(v=>v!=null);
+    const idx = porMes[ch].idx;
+    if(atd.length) acuraciaMensal[idx] = atd.reduce((a,b)=>a+b,0)/atd.length*100;
+    if(rup.length) rupturaMensal[idx] = rup.reduce((a,b)=>a+b,0)/rup.length*100;
   });
 
   return {
     bases,
-    acuracidade: totObjetivo>0 ? totFisico/totObjetivo*100 : null,
-    ruptura: totObjetivo>0 ? totPend/totObjetivo*100 : null,
-    totObjetivo, totFisico, totPend,
+    acuracidade: mesAtualDados!=null ? acuraciaMensal[mesAtualDados.idx] : null,
+    ruptura: mesAtualDados!=null ? rupturaMensal[mesAtualDados.idx] : null,
+    acuraciaMensal, rupturaMensal,
   };
 }
 
@@ -1294,6 +1329,13 @@ function producaoDashboardHTML(kpi, d){
 /* ---------------------------------------------------------------------
    Dashboard de Filiais (mapa do Brasil + ranking + tabela por base)
    --------------------------------------------------------------------- */
+function labelBaseParaMapa(bs){
+  if(bs.length===1) return bs[0].base.replace('Base ','');
+  // mais de uma base no mesmo estado (ex.: Cascavel - Consórcio / Cascavel - EPR) — usa a cidade em
+  // comum se todas compartilharem o mesmo prefixo, senão cai pra sigla do estado como último recurso
+  const prefixos = [...new Set(bs.map(b=>b.base.replace('Base ','').split(' - ')[0].trim()))];
+  return prefixos.length===1 ? prefixos[0] : bs.map(b=>b.base.replace('Base ','')).join(' / ');
+}
 function mapaBrasilHTML(bases, kpi){
   const porUF = {};
   bases.forEach(b=>{ if(b.uf){ (porUF[b.uf]=porUF[b.uf]||[]).push(b); } });
@@ -1312,7 +1354,7 @@ function mapaBrasilHTML(bases, kpi){
     paths += `<path class="uf${bs?' hasbase':''}" data-uf="${uf}" d="${st.d}" fill="${fill}" style="opacity:${op}"></path>`;
     if(bs){
       marks += `<circle class="mk" cx="${st.cx}" cy="${st.cy}" r="3.4"></circle>`;
-      marks += `<text class="mklbl" x="${st.cx}" y="${st.cy-6}" text-anchor="middle">${bs.length>1?uf:bs[0].base.replace('Base ','')}</text>`;
+      marks += `<text class="mklbl" x="${st.cx}" y="${st.cy-6}" text-anchor="middle">${labelBaseParaMapa(bs)}</text>`;
     }
   }
 
@@ -2161,10 +2203,12 @@ async function init(){
     // Acuracidade do Estoque (oficial, Matriz de Metas) é medida no CD — fonte ainda
     // pendente, por isso não é alimentada aqui. O que vem desta planilha é Ruptura
     // (Filiais); a acuracidade por base aparece só como detalhe operacional na própria
-    // aba Filiais (KPI_ACURACIDADE_FILIAL), sem entrar na Visão Consolidada.
-    const mesAtual = new Date().getMonth();
+    // aba Filiais (KPI_ACURACIDADE_FILIAL), sem entrar na Visão Consolidada. Histórico
+    // mensal real vem da aba "Resumo Mensal" (cresce um mês por vez, conforme o script
+    // do usuário roda).
     const kRupt = METAS[3].kpis[0];
-    kRupt.atual = d.ruptura; kRupt.meses[mesAtual] = d.ruptura;
+    kRupt.atual = d.ruptura;
+    d.rupturaMensal.forEach((v,i)=>{ if(v!=null) kRupt.meses[i] = v; });
     render();
   }).catch(e=>console.error('Erro ao buscar dados das Filiais:', e));
 }
