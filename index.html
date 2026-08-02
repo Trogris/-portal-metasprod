@@ -21,9 +21,10 @@
     /* níveis N1 (pior) -> N4 (melhor) — tons vivos de vermelho/laranja/verde, pra contrastar no fundo escuro */
     --n1:#ff4757; --n2:#ffa502; --n3:#7bed9f; --n4:#2ed573;
   }
-  /* Visão Consolidada usa um N4 mais escuro — o texto branco por cima do verde claro padrão ficava com
-     contraste ruim nessa tela especificamente (tabela/cards bem densos, muito verde lado a lado). */
-  .geral-view{--n4:#15803d;}
+  /* Visão Consolidada usa tons de verde ajustados — o texto branco por cima do N4 claro padrão ficava com
+     contraste ruim nessa tela especificamente (tabela/cards bem densos, muito verde lado a lado). N3 um
+     pouco mais forte que o pastel padrão, N4 um pouco mais claro que o verde escuro original do ajuste. */
+  .geral-view{--n3:#3ddc84; --n4:#16a34a;}
   :root[data-theme="light"]{
     --bg:#eef1f7;
     --panel:#ffffff;
@@ -673,32 +674,24 @@ function parseMesAnoFiliais(s){
 }
 
 async function calcularDadosFiliais(){
-  const [resumoJson, excessoJson, mensalJson] = await Promise.all([
+  const [resumoJson, mensalJson] = await Promise.all([
     fetchGvizJSON(FILIAIS_SHEET_ID, 'Resumo por Base'),
-    fetchGvizJSON(FILIAIS_SHEET_ID, 'Excesso de Estoque'),
     fetchGvizJSON(FILIAIS_SHEET_ID, 'Resumo Mensal'),
   ]);
   const numv = c => (c && typeof c.v === 'number') ? c.v : null;
   const strv = c => (c && c.v != null) ? String(c.v) : null;
 
   // "Resumo por Base": Base, % Atendimento, Ruptura %, Nível, SKUs na Meta, SKUs Total, Pendência Total.
-  // Continua alimentando objetivo (SKUs Total, só serve de referência pro % de excesso) e pendência —
-  // a acurácia/ruptura em si agora vem da aba "Resumo Mensal" (média real por semana, calculada pelo script do usuário).
+  // Continua alimentando objetivo (SKUs Total) e pendência — a acurácia/ruptura em si vem da aba "Resumo
+  // Mensal" (média real por semana, calculada pelo script do usuário). O "Excesso" (aba "Excesso de
+  // Estoque") foi removido: comparava quantidade de itens por código contra contagem de SKUs de outra
+  // aba — unidades diferentes, dava percentuais sem sentido (ex.: 360% numa base).
   const bases = [];
   (resumoJson.table.rows||[]).forEach(row=>{
     if(!row.c) return;
     const nome = strv(row.c[0]);
     if(!nome) return;
-    bases.push({ base: nome, uf: BASE_UF[nome]||null, skusMeta: numv(row.c[4])||0, objetivo: numv(row.c[5])||0, pend: numv(row.c[6])||0, excesso: 0 });
-  });
-
-  const excPorBase = {};
-  (excessoJson.table.rows||[]).forEach(row=>{
-    if(!row.c) return;
-    const nome = strv(row.c[0]);
-    const exc = numv(row.c[6]);
-    if(!nome || !exc) return;
-    excPorBase[nome] = (excPorBase[nome]||0) + exc;
+    bases.push({ base: nome, uf: BASE_UF[nome]||null, skusMeta: numv(row.c[4])||0, objetivo: numv(row.c[5])||0, pend: numv(row.c[6])||0 });
   });
 
   // "Resumo Mensal": Mês, Base, % Atendimento (média), Ruptura % (média), Nível, Semanas
@@ -718,8 +711,6 @@ async function calcularDadosFiliais(){
 
   let totSkusMeta=0, totSkusTotal=0;
   bases.forEach(b=>{
-    b.excesso = excPorBase[b.base] || 0;
-    b.excPct = b.objetivo>0 ? b.excesso/b.objetivo*100 : null;
     const d = mesAtualDados ? mesAtualDados.porBase[b.base] : null;
     b.ns = (d && d.atendimento!=null) ? d.atendimento*100 : null; // % atendimento da base, mês mais recente
     b.rupturaBase = (d && d.ruptura!=null) ? d.ruptura*100 : null; // ruptura da base, mês mais recente — indicador oficial
@@ -1406,17 +1397,32 @@ function initMapTooltip(d, kpi, valorFn){
     p.addEventListener('mouseleave', ()=> tip.style.opacity = 0);
   });
 }
+// Valor do Estoque (R$) e Variação ainda não têm fonte real — modelo fictício autorizado pelo usuário
+// (mesmo caso do Estoque/Logística), só pra já deixar o layout pronto. Troca por dado real quando chegar.
+const VALOR_ESTOQUE_FICTICIO_FILIAIS = {
+  'Base Paraíba':            { valor:210000, variacao: 4.2 },
+  'Base Goiânia':            { valor:265000, variacao:-3.1 },
+  'Base Brasília':           { valor:380000, variacao: 7.8 },
+  'Base Linhares':           { valor:195000, variacao:-1.5 },
+  'Base Cuiabá':             { valor:340000, variacao:12.4 },
+  'Base Campo Grande':       { valor:225000, variacao:-6.7 },
+  'Base Campinas':           { valor:298000, variacao: 2.3 },
+  'Base Cascavel - Consórcio':{ valor:175000, variacao:-9.2 },
+  'Base Cascavel - EPR':     { valor:170000, variacao:-14.8 },
+};
 function filiaisDashboardHTML(grp, d){
   const kpiRupt = grp.kpis[0];
   const nRupt = nivel(d.ruptura, kpiRupt);
-  const dentroMeta = d.bases.filter(b=>nivel(b.rupturaBase,kpiRupt)==='n4').length;
+  // "dentro da meta" = mesmo corte oficial mostrado na coluna Previsto da Visão Geral (Ruptura < 5%, ou seja
+  // qualquer nível que não seja N1) — não o N4 (excelência), que é bem mais rígido que a meta em si.
+  const dentroMeta = d.bases.filter(b=>{ const n = nivel(b.rupturaBase,kpiRupt); return n && n!=='n1'; }).length;
 
   const kpiCards = [
     { lbl:'Ruptura de Estoque (rede)', val: d.ruptura!=null?d.ruptura.toFixed(1)+'%':'–', badge:nRupt, cor: nRupt?corNivel(nRupt):'var(--accent)',
       icon:'<circle cx="12" cy="12" r="10"/><path d="M12 8v4M12 16h.01"/>' },
     { lbl:'Nível de Atendimento % (rede)', val: d.acuracidade!=null?d.acuracidade.toFixed(1)+'%':'–', cor:'var(--accent)',
       icon:'<path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/>' },
-    { lbl:'Acuracidade do Estoque (rede)', val: d.acuraciaEstoque!=null?d.acuraciaEstoque.toFixed(1)+'%':'–', cor:'var(--accent)',
+    { lbl:'Acuracidade do Estoque', val: d.acuraciaEstoque!=null?d.acuraciaEstoque.toFixed(1)+'%':'–', cor:'var(--accent)',
       icon:'<path d="M21 8V5a1 1 0 0 0-.5-.87l-7.5-4.3a2 2 0 0 0-2 0L3.5 4.13A1 1 0 0 0 3 5v14a1 1 0 0 0 .5.87l7.5 4.3a2 2 0 0 0 2 0"/><path d="M3.3 7 12 12l8.7-5M12 22V12"/>' },
     { lbl:'Bases dentro da meta', val:`${dentroMeta}/${d.bases.length}`, cor:'var(--n4)',
       icon:'<path d="M3 21V7l9-4 9 4v14"/><path d="M3 21h18"/>' },
@@ -1438,7 +1444,8 @@ function filiaisDashboardHTML(grp, d){
   const tableRows = [...d.bases].sort((a,b)=>(a.rupturaBase==null?999:a.rupturaBase)-(b.rupturaBase==null?999:b.rupturaBase)).map(b=>{
     const n = nivel(b.rupturaBase,kpiRupt);
     const cor = n?corNivel(n):'var(--ink-faint)';
-    const corExc = b.excPct==null?'var(--ink-faint)':b.excPct>15?'var(--n1)':b.excPct>8?'var(--n2)':'var(--ink)';
+    const fic = VALOR_ESTOQUE_FICTICIO_FILIAIS[b.base];
+    const corVar = !fic?'var(--ink-faint)':fic.variacao>=0?'var(--n4)':'var(--n1)';
     return `<tr>
       <td class="name">${b.base}</td>
       <td class="num dim">${b.uf||'—'}</td>
@@ -1447,7 +1454,8 @@ function filiaisDashboardHTML(grp, d){
       <td class="num dim">${b.ns!=null?b.ns.toFixed(1)+'%':'–'}</td>
       <td class="num dim">${b.acuraciaBase!=null?b.acuraciaBase.toFixed(1)+'%':'–'}</td>
       <td class="num">${b.pend.toLocaleString('pt-BR')}</td>
-      <td class="num" style="color:${corExc}">${b.excPct!=null?b.excPct.toFixed(1)+'%':'–'}</td>
+      <td class="num dim">${fic?'R$ '+Math.round(fic.valor/1000)+'k':'–'}</td>
+      <td class="num" style="color:${corVar}">${fic?(fic.variacao>=0?'+':'')+fic.variacao.toFixed(1)+'%':'–'}</td>
     </tr>`;
   }).join("");
 
@@ -1463,16 +1471,19 @@ function filiaisDashboardHTML(grp, d){
       <div class="panel" style="cursor:default"><h3><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 20l-5.5 2.5V6L9 3.5m0 16.5 6 2.5m-6-2.5V3.5m6 19 5.5-2.5V3L15 5.5m0 17V5.5m0 0L9 3.5"/></svg>Ruptura por base (mapa)</h3>${mapaBrasilHTML(d.bases,kpiRupt,b=>b.rupturaBase)}</div>
       <div class="panel" onclick="togglePanel(this)"><h3><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 3v18h18"/><rect x="7" y="10" width="3" height="8"/><rect x="12" y="6" width="3" height="12"/><rect x="17" y="13" width="3" height="5"/></svg>Ranking de bases (ruptura)${EXPAND_IC}</h3>${rankingHTML}</div>
     </div>
+    <div class="empty-state" style="border:1px dashed var(--n2);color:var(--ink);margin-bottom:14px">
+      <b style="color:var(--n2)">Valor do Estoque (R$) e Variação são fictícios</b> — modelo de layout até você passar os valores reais. Todo o resto da tabela (Ruptura, Atendimento, Acuracidade, Pendência) já é dado ao vivo.
+    </div>
     <div class="tablewrap">
       <div class="scroll">
         <table>
-          <thead><tr><th class="name">Base</th><th>UF</th><th>Ruptura</th><th>Nível</th><th>Atendimento</th><th>Acuracidade</th><th>Pendência (un.)</th><th>Excesso</th></tr></thead>
+          <thead><tr><th class="name">Base</th><th>UF</th><th>Ruptura</th><th>Nível</th><th>Atendimento</th><th>Acuracidade</th><th>Pendência (un.)</th><th>Valor Estoque (R$)*</th><th>Variação*</th></tr></thead>
           <tbody>${tableRows}</tbody>
         </table>
       </div>
       <div class="foot">${legendHTML()}<div>${d.bases.length} bases</div></div>
     </div>
-    <div class="foot-note">Dados calculados ao vivo a partir da planilha semanal de balanço de estoque das filiais. <a href="${FILIAIS_SHEET_URL}" target="_blank" style="color:var(--accent)">Abrir planilha completa ↗</a></div>
+    <div class="foot-note">Dados calculados ao vivo a partir da planilha semanal de balanço de estoque das filiais. * Valor do Estoque e Variação são fictícios, aguardando fonte real. <a href="${FILIAIS_SHEET_URL}" target="_blank" style="color:var(--accent)">Abrir planilha completa ↗</a></div>
   `;
 }
 function viewFiliais(grp){
