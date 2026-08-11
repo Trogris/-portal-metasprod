@@ -510,9 +510,23 @@ function somarMetricas(...objs){
 function combinarPrevisto(m){ return somarMetricas(m['Prev'],m['Reprogramado'],m['Reprog.'],m['Reprog'],m['Não Prog.']); }
 function combinarReal(m){ return somarMetricas(m['Real']); }
 
+// Busca com re-tentativa — o Apps Script do Cronograma às vezes devolve 404/500 transitório;
+// tenta algumas vezes com uma pausinha antes de desistir, em vez de falhar de primeira.
+async function fetchRetry(url, tentativas=3, esperaMs=700){
+  let ultimoErro;
+  for(let i=0;i<tentativas;i++){
+    try{
+      const res = await fetch(url, {cache:'no-store'});
+      if(res.ok) return res;
+      ultimoErro = new Error('HTTP '+res.status);
+    }catch(e){ ultimoErro = e; }
+    if(i<tentativas-1) await new Promise(r=>setTimeout(r, esperaMs*(i+1)));
+  }
+  throw ultimoErro;
+}
+
 async function calcularAderenciaPrograma(){
-  const res = await fetch(SOURCE_WEBAPP_URL+'?t='+Date.now());
-  if(!res.ok) throw new Error('HTTP '+res.status);
+  const res = await fetchRetry(SOURCE_WEBAPP_URL+'?t='+Date.now());
   const data = await res.json();
   const prevAno={}, realAno={};
   (data.projects||[]).forEach(p=>{
@@ -594,7 +608,7 @@ let dadosProducao = null;
 let dadosProducaoPromise = null;
 function getDadosProducao(){
   if(dadosProducao) return Promise.resolve(dadosProducao);
-  if(!dadosProducaoPromise) dadosProducaoPromise = calcularAderenciaPrograma().then(d=>{ dadosProducao = d; return d; });
+  if(!dadosProducaoPromise) dadosProducaoPromise = calcularAderenciaPrograma().then(d=>{ dadosProducao = d; return d; }).catch(e=>{ dadosProducaoPromise = null; throw e; });
   return dadosProducaoPromise;
 }
 
@@ -611,7 +625,7 @@ let dadosMI = null; // cache do resultado de calcularDadosMI(), preenchido no in
 let dadosMIPromise = null; // evita disparar duas buscas em paralelo (init + navegação do usuário)
 function getDadosMI(){
   if(dadosMI) return Promise.resolve(dadosMI);
-  if(!dadosMIPromise) dadosMIPromise = calcularDadosMI().then(d=>{ dadosMI = d; return d; });
+  if(!dadosMIPromise) dadosMIPromise = calcularDadosMI().then(d=>{ dadosMI = d; return d; }).catch(e=>{ dadosMIPromise = null; throw e; });
   return dadosMIPromise;
 }
 
@@ -648,13 +662,13 @@ let dadosFiliais = null;
 let dadosFiliaisPromise = null;
 function getDadosFiliais(){
   if(dadosFiliais) return Promise.resolve(dadosFiliais);
-  if(!dadosFiliaisPromise) dadosFiliaisPromise = calcularDadosFiliais().then(d=>{ dadosFiliais = d; return d; });
+  if(!dadosFiliaisPromise) dadosFiliaisPromise = calcularDadosFiliais().then(d=>{ dadosFiliais = d; return d; }).catch(e=>{ dadosFiliaisPromise = null; throw e; });
   return dadosFiliaisPromise;
 }
 
 async function fetchGvizJSON(sheetId, nomeAba){
-  const url = `https://docs.google.com/spreadsheets/d/${sheetId}/gviz/tq?tqx=out:json&sheet=${encodeURIComponent(nomeAba)}`;
-  const res = await fetch(url);
+  const url = `https://docs.google.com/spreadsheets/d/${sheetId}/gviz/tq?tqx=out:json&sheet=${encodeURIComponent(nomeAba)}&t=${Date.now()}`;
+  const res = await fetch(url, {cache:'no-store'});
   const text = await res.text();
   return JSON.parse(text.slice(text.indexOf('{'), text.lastIndexOf('}')+1));
 }
@@ -1127,7 +1141,7 @@ function producaoStepSVG(qtyArr, pctArr, kpi){
   </svg>
   <div class="bars-legend">
     <span class="lg"><span class="sw" style="background:var(--accent)"></span>Equipamentos Produzidos (mês)</span>
-    <span class="lg"><span class="sw" style="background:var(--ink)"></span>Aderência à Programação (acumulado)</span>
+    <span class="lg"><span class="sw" style="background:var(--ink)"></span>Aderência à Programação</span>
   </div>`;
 }
 function rankingProjetosHTML(ranking, kpi){
@@ -1235,8 +1249,8 @@ function previstoRealizadoAcumSVG(prevArr, realArr, kpi, hojePos){
     ${labels}
   </svg>
   <div class="bars-legend">
-    <span class="lg"><span class="sw" style="background:var(--ink-faint)"></span>Previsto (acumulado)</span>
-    <span class="lg"><span class="sw" style="background:var(--accent)"></span>Realizado (acumulado)</span>
+    <span class="lg"><span class="sw" style="background:var(--ink-faint)"></span>Previsto</span>
+    <span class="lg"><span class="sw" style="background:var(--accent)"></span>Realizado</span>
     <span class="lg"><span class="sw" style="background:var(--n1);opacity:.5"></span>Área = atrasado</span>
     <span class="lg"><span class="sw" style="background:var(--n4);opacity:.5"></span>Área = adiantado</span>
   </div>`;
@@ -1285,7 +1299,7 @@ function producaoDashboardHTML(kpi, d){
       icon:'<path d="M21 8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16Z"/><path d="m3.3 7 8.7 5 8.7-5"/><path d="M12 22V12"/>' },
     { lbl:'Aderência à Programação', val: fmt(kpi.atual,kpi.unidade), badge:n, cor: n?corNivel(n):'var(--accent)',
       icon:'<path d="M3 3v18h18"/><path d="m19 9-5 5-4-4-3 3"/>' },
-    { lbl:'Gap acumulado (Real. − Prev.)', val: gapTxt, cor: gapCor,
+    { lbl:'Gap (Real. − Prev.)', val: gapTxt, cor: gapCor,
       icon:'<path d="M3 3v18h18"/><path d="m19 9-5 5-4-4-3 3"/><path d="M15 9h4v4"/>' },
     { lbl:'Média Eq. Produzidos/mês', val: mediaMensal!=null?Math.round(mediaMensal).toLocaleString('pt-BR'):'–', cor:'var(--accent)',
       icon:'<path d="M3 3v18h18"/><rect x="7" y="10" width="3" height="8"/><rect x="12" y="6" width="3" height="12"/><rect x="17" y="13" width="3" height="5"/>' },
@@ -1307,7 +1321,7 @@ function producaoDashboardHTML(kpi, d){
       ${producaoStepSVG(d.producaoMensal, kpi.meses, kpi)}
     </div>
     <div class="panel" onclick="togglePanel(this)" style="margin-top:14px">
-      <h3><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 3v18h18"/><path d="m19 9-5 5-4-4-3 3"/></svg>Previsto vs Realizado (acumulado)${EXPAND_IC}</h3>
+      <h3><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 3v18h18"/><path d="m19 9-5 5-4-4-3 3"/></svg>Previsto vs Realizado${EXPAND_IC}</h3>
       ${previstoRealizadoAcumSVG(d.previstoAcumMensalCompleto, d.realizadoAcumMensal, kpi, d.hojePos)}
     </div>
   `;
@@ -1826,10 +1840,10 @@ function viewEstoqueMatriz(){
    Prioridade, Status, Observações. Dados reais ao vivo — sem KPI
    oficial atrelado na Matriz de Metas (mesmo caso do Estoque).
    ===================================================================== */
-const PLANO_ACAO_SHEET_ID = '1Ak17VvJvVLvCEkI2gdZQ4AAy0GU8wrVm';
+const PLANO_ACAO_SHEET_ID = '1k2QpjUZZcOjlTQZMZ_nGYB6NgAupo0QJFqaTng5tQWQ';
 const PLANO_ACAO_SHEET_URL = `https://docs.google.com/spreadsheets/d/${PLANO_ACAO_SHEET_ID}/edit`;
 const PLANO_ACAO_WEBAPP_URL = 'https://script.google.com/macros/s/AKfycbw57FhK0aU7IV-L02PcO9DTT9z-F5DwGXj91v85HCx7UD0y7EhpNtJ6M3idJdGvLsNTWw/exec';
-const PLANO_ACAO_ABAS = ['Produção', 'Estoque & Logística', 'Transversais'];
+const PLANO_ACAO_ABAS = ['Produção', 'Estoque & Logística'];
 const STATUS_COR_PLANO = {
   'Proposta':'var(--ink-faint)', 'A iniciar':'var(--n2)', 'Em andamento':'var(--accent)',
   'Concluído':'var(--n4)', 'Atrasado':'var(--n1)', 'Cancelado':'var(--ink-faint)',
@@ -1880,10 +1894,17 @@ let dadosPlanoAcao = null;
 let dadosPlanoAcaoPromise = null;
 function getDadosPlanoAcao(){
   if(dadosPlanoAcao) return Promise.resolve(dadosPlanoAcao);
-  if(!dadosPlanoAcaoPromise) dadosPlanoAcaoPromise = calcularDadosPlanoAcao().then(d=>{ dadosPlanoAcao = d; return d; });
+  if(!dadosPlanoAcaoPromise) dadosPlanoAcaoPromise = calcularDadosPlanoAcao().then(d=>{ dadosPlanoAcao = d; return d; }).catch(e=>{ dadosPlanoAcaoPromise = null; throw e; });
   return dadosPlanoAcaoPromise;
 }
 
+function fmtDataGviz(v){
+  if(v==null) return null;
+  const m = /^Date\((\d+),(\d+),(\d+)\)$/.exec(String(v));
+  if(!m) return String(v);
+  const [, ano, mes, dia] = m;
+  return `${dia.padStart(2,'0')}/${(parseInt(mes,10)+1).toString().padStart(2,'0')}/${ano}`;
+}
 async function calcularDadosPlanoAcao(){
   const results = await Promise.all(PLANO_ACAO_ABAS.map(nome=>fetchGvizJSON(PLANO_ACAO_SHEET_ID, nome)));
   const areas = PLANO_ACAO_ABAS.map((nome, i)=>{
@@ -1893,7 +1914,7 @@ async function calcularDadosPlanoAcao(){
       const v = idx => (c[idx] && c[idx].v!=null) ? c[idx].v : null;
       return {
         num: v(0), tema: v(1), acao: v(2), objetivo: v(3),
-        responsavel: v(4), prazo: v(5), prioridade: v(6), status: v(7)||'—', obs: v(8),
+        responsavel: v(4), prazo: fmtDataGviz(v(5)), prioridade: v(6), status: v(7)||'—', obs: v(8),
       };
     }).filter(r=>r.acao);
     return { nome, acoes: rows };
