@@ -140,6 +140,10 @@
   .card .sub{font-size:10.5px;color:var(--ink-faint);margin-top:2px}
   .tier-badge{font-size:10px;font-weight:800;padding:2px 7px;border-radius:9px;color:#fff}
 
+  /* ---------- Destaque do último resultado nos gráficos (anel pulsante) ---------- */
+  @keyframes pulseRing{0%{transform:scale(1);opacity:.85}100%{transform:scale(1.9);opacity:0}}
+  .pulse-ring{transform-box:fill-box;transform-origin:center;animation:pulseRing 1.7s ease-out infinite}
+
   /* ---------- Table ---------- */
   .tablewrap{
     background:var(--panel);border:1px solid var(--line);
@@ -445,11 +449,6 @@ const METAS = [
       { id:"ruptura", nome:"Ruptura de Estoque (itens críticos)", unidade:"%", sentido:"menor", faixas:[2,3,5], automatico:true, atual:null, meses:Array(12).fill(null), links:[] },
     ]
   },
-  { area:"Logística", cor:"#e07b4a",
-    kpis:[
-      { id:"sla", nome:"SLA de Atendimento", unidade:"%", sentido:"maior", faixas:[85,92,95], automatico:false, atual:null, meses:Array(12).fill(null), apenasIndicador:true, links:[] },
-    ]
-  },
 ];
 
 const MESES_ORDEM = ["Jan","Fev","Mar","Abr","Mai","Jun","Jul","Ago","Set","Out","Nov","Dez"];
@@ -698,16 +697,21 @@ async function calcularDadosFiliais(){
   const strv = c => (c && c.v != null) ? String(c.v) : null;
 
   // "Resumo por Base": Base, % Atendimento, Ruptura %, Nível, SKUs na Meta, SKUs Total, Pendência Total.
-  // Continua alimentando objetivo (SKUs Total) e pendência — a acurácia/ruptura em si vem da aba "Resumo
-  // Mensal" (média real por semana, calculada pelo script do usuário). O "Excesso" (aba "Excesso de
-  // Estoque") foi removido: comparava quantidade de itens por código contra contagem de SKUs de outra
-  // aba — unidades diferentes, dava percentuais sem sentido (ex.: 360% numa base).
+  // É o estado ATUAL por base (atualizado ao vivo conforme pendências são resolvidas) — alimenta o
+  // mapa, o ranking e a tabela por base (o "como está agora"). A aba "Resumo Mensal" é a MÉDIA fechada
+  // do mês (calculada pelo script do usuário) — usada só para os cards de rede e o histórico mensal
+  // (Matriz de Metas), que precisam de um número estável mês a mês, não um valor que muda a cada minuto.
+  // O "Excesso" (aba "Excesso de Estoque") foi removido: comparava quantidade de itens por código contra
+  // contagem de SKUs de outra aba — unidades diferentes, dava percentuais sem sentido (ex.: 360% numa base).
   const bases = [];
   (resumoJson.table.rows||[]).forEach(row=>{
     if(!row.c) return;
     const nome = strv(row.c[0]);
     if(!nome) return;
-    bases.push({ base: nome, uf: BASE_UF[nome]||null, skusMeta: numv(row.c[4])||0, objetivo: numv(row.c[5])||0, pend: numv(row.c[6])||0 });
+    const ns = numv(row.c[1]), rup = numv(row.c[2]);
+    bases.push({ base: nome, uf: BASE_UF[nome]||null,
+      ns: ns!=null ? ns*100 : null, rupturaBase: rup!=null ? rup*100 : null,
+      skusMeta: numv(row.c[4])||0, objetivo: numv(row.c[5])||0, pend: numv(row.c[6])||0 });
   });
 
   // "Resumo Mensal": Mês, Base, % Atendimento (média), Ruptura % (média), Nível, Semanas
@@ -727,10 +731,7 @@ async function calcularDadosFiliais(){
 
   let totSkusMeta=0, totSkusTotal=0;
   bases.forEach(b=>{
-    const d = mesAtualDados ? mesAtualDados.porBase[b.base] : null;
-    b.ns = (d && d.atendimento!=null) ? d.atendimento*100 : null; // % atendimento da base, mês mais recente
-    b.rupturaBase = (d && d.ruptura!=null) ? d.ruptura*100 : null; // ruptura da base, mês mais recente — indicador oficial
-    b.acuraciaBase = b.objetivo>0 ? b.skusMeta/b.objetivo*100 : null; // acuracidade de estoque (SKUs na Meta / SKUs Total), semana atual
+    b.acuraciaBase = b.objetivo>0 ? b.skusMeta/b.objetivo*100 : null; // acuracidade de estoque (SKUs na Meta / SKUs Total), estado atual
     totSkusMeta += b.skusMeta; totSkusTotal += b.objetivo;
   });
 
@@ -988,7 +989,7 @@ function sparklineSVG(kpi){
     const isFirst = idx===0, isLast = idx===pts.length-1;
     const anchor = isFirst ? 'start' : isLast ? 'end' : 'middle';
     const lx = isFirst ? x(idx)+7 : isLast ? x(idx)-7 : x(idx);
-    const ring = isLast ? `<circle cx="${x(idx).toFixed(1)}" cy="${y(p.v).toFixed(1)}" r="7" fill="none" stroke="var(--accent)" stroke-width="2"/>` : '';
+    const ring = isLast ? `<circle class="pulse-ring" cx="${x(idx).toFixed(1)}" cy="${y(p.v).toFixed(1)}" r="9" fill="none" stroke="var(--accent)" stroke-width="2"/>` : '';
     return `${ring}<circle cx="${x(idx).toFixed(1)}" cy="${y(p.v).toFixed(1)}" r="4" fill="${corNivel(nv)}" stroke="var(--panel)" stroke-width="1.5"/>
       <text x="${lx.toFixed(1)}" y="${(y(p.v)-10).toFixed(1)}" text-anchor="${anchor}" fill="var(--ink)" font-size="9.5" font-weight="600">${fmt(p.v,kpi.unidade)}</text>`;
   }).join('');
@@ -1105,16 +1106,16 @@ function producaoStepSVG(qtyArr, pctArr, kpi){
   }
 
   const barW = Math.min(26, (w-P.l-P.r)/idxs.length*0.5);
-  let bars = '';
+  // rótulos do valor ficam centralizados em TODAS as barras (incl. 1ª/última — nada de
+  // deslocar pro lado, senão o número fica desalinhado da barra) e são desenhados por
+  // último (depois da linha/pontos de %), pra nunca ficar encoberto por eles.
+  let bars = '', barLabels = '';
   idxs.forEach((mi,pos)=>{
     const v = qtyArr[mi];
     if(v==null) return;
-    const isFirst = pos===0, isLast = pos===idxs.length-1;
-    const anchor = isFirst?'start':isLast?'end':'middle';
-    const lx = isFirst?x(pos)+7:isLast?x(pos)-7:x(pos);
     const bx = x(pos)-barW/2, by = yQty(v);
     bars += `<rect x="${bx.toFixed(1)}" y="${by.toFixed(1)}" width="${barW.toFixed(1)}" height="${(h-P.b-by).toFixed(1)}" rx="3" fill="var(--accent)" opacity="0.85"/>`;
-    bars += `<text x="${lx.toFixed(1)}" y="${(by-6).toFixed(1)}" text-anchor="${anchor}" fill="var(--ink-dim)" font-size="9.5">${Math.round(v)}</text>`;
+    barLabels += `<text x="${x(pos).toFixed(1)}" y="${(by-6).toFixed(1)}" text-anchor="middle" fill="var(--ink-dim)" font-size="9.5" paint-order="stroke" stroke="var(--panel)" stroke-width="3" stroke-linejoin="round">${Math.round(v)}</text>`;
   });
 
   // linha em escada: segura o valor anterior até o próximo mês, depois sobe/desce
@@ -1128,22 +1129,19 @@ function producaoStepSVG(qtyArr, pctArr, kpi){
   const lineDots = linePts.map((p,i)=>{
     const n = nivel(p.v, kpi);
     const isLast = i===linePts.length-1;
-    const ring = isLast ? `<circle cx="${x(p.pos).toFixed(1)}" cy="${yPct(p.v).toFixed(1)}" r="6.5" fill="none" stroke="var(--accent)" stroke-width="2"/>` : '';
+    const ring = isLast ? `<circle class="pulse-ring" cx="${x(p.pos).toFixed(1)}" cy="${yPct(p.v).toFixed(1)}" r="9" fill="none" stroke="var(--accent)" stroke-width="2"/>` : '';
     return `${ring}<circle cx="${x(p.pos).toFixed(1)}" cy="${yPct(p.v).toFixed(1)}" r="3.5" fill="${corNivel(n)}" stroke="var(--panel)" stroke-width="1.5"/>`;
   }).join('');
 
   const labels = idxs.map((mi,pos)=>{
-    const isFirst = pos===0, isLast = pos===idxs.length-1;
-    const anchor = isFirst?'start':isLast?'end':'middle';
-    const lx = isFirst?x(pos)+7:isLast?x(pos)-7:x(pos);
-    return `<text x="${lx.toFixed(1)}" y="${h-10}" text-anchor="${anchor}" fill="var(--ink-faint)" font-size="9.5">${MESES_ORDEM[mi]}</text>`;
+    return `<text x="${x(pos).toFixed(1)}" y="${h-10}" text-anchor="middle" fill="var(--ink-faint)" font-size="9.5">${MESES_ORDEM[mi]}</text>`;
   }).join('');
 
   return `<svg viewBox="0 0 ${w} ${h}" style="width:100%;height:auto;display:block">
     ${grid}${bars}
     ${metaLine}
     <path d="${stepPath}" fill="none" stroke="var(--ink)" stroke-width="2" opacity="0.9"/>
-    ${lineDots}${rightAxis}${labels}
+    ${lineDots}${rightAxis}${labels}${barLabels}
   </svg>
   <div class="bars-legend">
     <span class="lg"><span class="sw" style="background:var(--accent)"></span>Equipamentos Produzidos (mês)</span>
@@ -1232,7 +1230,7 @@ function previstoRealizadoAcumSVG(prevArr, realArr, kpi, hojePos){
     const pctMes = previsto>0 ? p.v/previsto*100 : null;
     const nv = pctMes!=null ? nivel(pctMes,kpi) : null;
     const cor = nv?corNivel(nv):'var(--accent)';
-    const ring = isLast ? `<circle cx="${x(p.pos).toFixed(1)}" cy="${y(p.v).toFixed(1)}" r="7" fill="none" stroke="var(--accent)" stroke-width="2"/>` : '';
+    const ring = isLast ? `<circle class="pulse-ring" cx="${x(p.pos).toFixed(1)}" cy="${y(p.v).toFixed(1)}" r="9" fill="none" stroke="var(--accent)" stroke-width="2"/>` : '';
     return `${ring}<circle cx="${x(p.pos).toFixed(1)}" cy="${y(p.v).toFixed(1)}" r="4" fill="${cor}" stroke="var(--panel)" stroke-width="1.5"/>
       <text x="${lx.toFixed(1)}" y="${(y(p.v)-10).toFixed(1)}" text-anchor="${anchor}" fill="var(--ink)" font-size="9.5" font-weight="600">${Math.round(p.v)}</text>`;
   }).join('');
@@ -1477,7 +1475,7 @@ function filiaisDashboardHTML(grp, d){
       <div class="panel" onclick="togglePanel(this)"><h3><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 3v18h18"/><rect x="7" y="10" width="3" height="8"/><rect x="12" y="6" width="3" height="12"/><rect x="17" y="13" width="3" height="5"/></svg>Ranking de bases (ruptura)${EXPAND_IC}</h3>${rankingHTML}</div>
     </div>
     <div class="empty-state" style="border:1px dashed var(--n2);color:var(--ink);margin-bottom:14px">
-      <b style="color:var(--n2)">Valor do Estoque (R$) e Variação são fictícios</b> — modelo de layout até você passar os valores reais. Todo o resto da tabela (Ruptura, Atendimento, Acuracidade) já é dado ao vivo.
+      <b style="color:var(--n2)">Valor do Estoque (R$) e Variação são fictícios</b>
     </div>
     <div class="tablewrap">
       <div class="scroll">
@@ -1616,7 +1614,7 @@ function acuraciaLineSVG(meses, meta){
     const good = m.acuracia>=meta;
     const cor = good?'var(--n4)':'var(--n1)';
     const r = isGeral?6:3.5;
-    const ring = isGeral?`<circle cx="${x(i).toFixed(1)}" cy="${y(m.acuracia).toFixed(1)}" r="${r+3}" fill="none" stroke="var(--accent)" stroke-width="2"/>`:'';
+    const ring = isGeral?`<circle class="pulse-ring" cx="${x(i).toFixed(1)}" cy="${y(m.acuracia).toFixed(1)}" r="${r+3}" fill="none" stroke="var(--accent)" stroke-width="2"/>`:'';
     return `${ring}<circle cx="${x(i).toFixed(1)}" cy="${y(m.acuracia).toFixed(1)}" r="${r}" fill="${cor}" stroke="var(--panel)" stroke-width="1.5"/>
       <text x="${x(i).toFixed(1)}" y="${(y(m.acuracia)-11).toFixed(1)}" text-anchor="middle" fill="var(--ink)" font-size="9.5" font-weight="${isGeral?700:600}">${m.acuracia.toFixed(1)}%</text>`;
   }).join('');
@@ -2081,7 +2079,7 @@ function custoKmLineSVG(labels, valores, meta){
   const dots = valores.map((v,i)=>{
     const cor = v<=meta?'var(--n4)':'var(--n1)';
     const isLast = i===valores.length-1;
-    const ring = isLast ? `<circle cx="${x(i).toFixed(1)}" cy="${y(v).toFixed(1)}" r="7" fill="none" stroke="var(--accent)" stroke-width="2"/>` : '';
+    const ring = isLast ? `<circle class="pulse-ring" cx="${x(i).toFixed(1)}" cy="${y(v).toFixed(1)}" r="9" fill="none" stroke="var(--accent)" stroke-width="2"/>` : '';
     return `${ring}<circle cx="${x(i).toFixed(1)}" cy="${y(v).toFixed(1)}" r="4" fill="${cor}" stroke="var(--panel)" stroke-width="1.5"/>
       <text x="${x(i).toFixed(1)}" y="${(y(v)-11).toFixed(1)}" text-anchor="middle" fill="var(--ink)" font-size="9.5" font-weight="600">R$ ${v.toFixed(2)}</text>`;
   }).join('');
@@ -2190,7 +2188,7 @@ function secaoCustoRotaHTML(D){
 function viewLogisticaMatriz(){
   const D = DADOS_LOGISTICA_EXEMPLO;
   document.getElementById('view-root').innerHTML = `
-    ${topBarHTML('Painéis da área', 'Logística', null)}
+    ${topBarHTML('Painéis da área', 'Logística <span class="pend-tag" style="color:var(--n2);border-color:var(--n2)">Em construção</span>', null)}
     <div class="empty-state" style="border:1px dashed var(--n2);color:var(--ink);margin-bottom:18px">
       <b style="color:var(--n2)">Modelo com dados fictícios</b> — os números abaixo são só um exemplo de layout, ainda não vêm de nenhuma planilha real. Assim que você passar a fonte, eles são substituídos pelos dados de verdade, sem mudar o visual.
     </div>
