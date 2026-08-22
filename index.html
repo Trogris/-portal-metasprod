@@ -469,12 +469,15 @@ function fmt(v,un){
   return un==="%" ? n+"%" : (un?n+" "+un:n);
 }
 function metaN4Texto(kpi){
-  const c = kpi.faixas[2];
-  return kpi.sentido==="maior" ? `≥ ${fmt(c,kpi.unidade)}` : `< ${fmt(c,kpi.unidade)}`;
+  // alvo N4: faixas[2] quando maior é melhor (ex.: ≥97%), faixas[0] quando menor é melhor (ex.: < R$200k)
+  return kpi.sentido==="maior" ? `≥ ${fmt(kpi.faixas[2],kpi.unidade)}` : `< ${fmt(kpi.faixas[0],kpi.unidade)}`;
+}
+function metaN4Valor(kpi){
+  return kpi.sentido==="maior" ? kpi.faixas[2] : kpi.faixas[0];
 }
 function atingimento(valor, kpi){
   if(valor==null) return null;
-  const meta = kpi.faixas[2];
+  const meta = metaN4Valor(kpi);
   if(!meta) return null;
   return kpi.sentido==="maior" ? (valor/meta*100) : (meta/valor*100);
 }
@@ -956,7 +959,7 @@ function sparklineSVG(kpi){
   if(!pts.length) return '<div class="empty-state">Ainda sem histórico mensal do saldo.</div>';
   const w=560,h=190,P={l:66,r:26,t:26,b:34};
   const vals = pts.map(p=>p.v);
-  const meta = (kpi.faixas && kpi.faixas[2]!=null) ? kpi.faixas[2] : null;
+  const meta = kpi.faixas ? metaN4Valor(kpi) : null;
   let lo = Math.min(...vals, ...(meta!=null?[meta]:[])), hi = Math.max(...vals, ...(meta!=null?[meta]:[]));
   const pad = (hi-lo)*0.3 || Math.max(hi*0.1,1);
   lo -= pad; hi += pad;
@@ -977,7 +980,7 @@ function sparklineSVG(kpi){
   const metaLine = meta!=null ? (()=>{
     const ym = y(meta);
     return `<line x1="${P.l}" y1="${ym.toFixed(1)}" x2="${w-P.r}" y2="${ym.toFixed(1)}" stroke="var(--n2)" stroke-width="1.5" stroke-dasharray="5 4" opacity=".9"/>
-      <text x="${w-P.r}" y="${(ym-6).toFixed(1)}" text-anchor="end" fill="var(--n2)" font-size="9.5" font-weight="600">meta ${fmt(meta,kpi.unidade)}</text>`;
+      <text x="${w-P.r}" y="${(ym-6).toFixed(1)}" text-anchor="end" fill="var(--n2)" font-size="9.5" font-weight="600">meta N4 · ${fmt(meta,kpi.unidade)}</text>`;
   })() : '';
 
   const path = pts.map((p,idx)=>`${idx===0?'M':'L'}${x(idx).toFixed(1)},${y(p.v).toFixed(1)}`).join(' ');
@@ -1079,7 +1082,7 @@ function producaoStepSVG(qtyArr, pctArr, kpi){
   const maxQty = Math.max(...qtyVals, 1) * 1.25;
   const yQty = v => h-P.b - (v/maxQty)*(h-P.t-P.b);
 
-  const meta = (kpi.faixas && kpi.faixas[2]!=null) ? kpi.faixas[2] : null;
+  const meta = kpi.faixas ? metaN4Valor(kpi) : null;
   const pctVals = idxs.map(i=>pctArr[i]).filter(v=>v!=null);
   let loPct = Math.min(...(pctVals.length?pctVals:[70]), ...(meta!=null?[meta]:[])), hiPct = Math.max(...(pctVals.length?pctVals:[110]), ...(meta!=null?[meta]:[]));
   const padPct = (hiPct-loPct)*0.3 || 10;
@@ -1088,7 +1091,7 @@ function producaoStepSVG(qtyArr, pctArr, kpi){
   const metaLine = meta!=null ? (()=>{
     const ym = yPct(meta);
     return `<line x1="${P.l}" y1="${ym.toFixed(1)}" x2="${w-P.r}" y2="${ym.toFixed(1)}" stroke="var(--n2)" stroke-width="1.5" stroke-dasharray="5 4" opacity=".9"/>
-      <text x="${w-P.r}" y="${(ym-6).toFixed(1)}" text-anchor="end" fill="var(--n2)" font-size="9.5" font-weight="600">meta ${meta}%</text>`;
+      <text x="${w-P.r}" y="${(ym-6).toFixed(1)}" text-anchor="end" fill="var(--n2)" font-size="9.5" font-weight="600">meta N4 · ${meta}%</text>`;
   })() : '';
 
   let grid = '';
@@ -1328,6 +1331,7 @@ function producaoDashboardHTML(kpi, d){
       <h3><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 3v18h18"/><path d="m19 9-5 5-4-4-3 3"/></svg>Previsto vs Realizado${EXPAND_IC}</h3>
       ${previstoRealizadoAcumSVG(d.previstoAcumMensalCompleto, d.realizadoAcumMensal, kpi, d.hojePos)}
     </div>
+    <div class="foot-note">Dados calculados ao vivo a partir da planilha oficial de Aderência à Programação (FM.PRD.001), semana a semana. <a href="${(kpi.links&&kpi.links[0]&&kpi.links[0].url)||'#'}" target="_blank" style="color:var(--accent)">Abrir Cronograma completo ↗</a></div>
   `;
 }
 
@@ -1603,7 +1607,7 @@ function acuraciaLineSVG(meses, meta){
 
   const ym = y(meta);
   const metaLine = `<line x1="${P.l}" y1="${ym.toFixed(1)}" x2="${w-P.r}" y2="${ym.toFixed(1)}" stroke="var(--n2)" stroke-width="1.5" stroke-dasharray="5 4" opacity=".9"/>
-    <text x="${w-P.r}" y="${(ym-6).toFixed(1)}" text-anchor="end" fill="var(--n2)" font-size="9.5" font-weight="600">meta ${meta}%</text>`;
+    <text x="${w-P.r}" y="${(ym-6).toFixed(1)}" text-anchor="end" fill="var(--n2)" font-size="9.5" font-weight="600">meta N4 · ${meta}%</text>`;
 
   const path = meses.map((m,i)=>`${i===0?'M':'L'}${x(i).toFixed(1)},${y(m.acuracia).toFixed(1)}`).join(' ');
   const areaBottom=(h-P.b).toFixed(1);
@@ -2070,7 +2074,7 @@ function custoKmLineSVG(labels, valores, meta){
 
   const ym = y(meta);
   const metaLine = `<line x1="${P.l}" y1="${ym.toFixed(1)}" x2="${w-P.r}" y2="${ym.toFixed(1)}" stroke="var(--n2)" stroke-width="1.5" stroke-dasharray="5 4" opacity=".9"/>
-    <text x="${w-P.r}" y="${(ym-6).toFixed(1)}" text-anchor="end" fill="var(--n2)" font-size="9.5" font-weight="600">meta R$ ${meta.toFixed(2)}</text>`;
+    <text x="${w-P.r}" y="${(ym-6).toFixed(1)}" text-anchor="end" fill="var(--n2)" font-size="9.5" font-weight="600">meta N4 · R$ ${meta.toFixed(2)}</text>`;
 
   const path = valores.map((v,i)=>`${i===0?'M':'L'}${x(i).toFixed(1)},${y(v).toFixed(1)}`).join(' ');
   const areaBottom=(h-P.b).toFixed(1);
@@ -2186,13 +2190,14 @@ function secaoCustoRotaHTML(D){
 }
 
 function viewLogisticaMatriz(){
-  const D = DADOS_LOGISTICA_EXEMPLO;
+  // Área ainda não liberada — não mostra o modelo fictício, só o aviso de "em construção".
   document.getElementById('view-root').innerHTML = `
-    ${topBarHTML('Painéis da área', 'Logística <span class="pend-tag" style="color:var(--n2);border-color:var(--n2)">Em construção</span>', null)}
-    <div class="empty-state" style="border:1px dashed var(--n2);color:var(--ink);margin-bottom:18px">
-      <b style="color:var(--n2)">Modelo com dados fictícios</b> — os números abaixo são só um exemplo de layout, ainda não vêm de nenhuma planilha real. Assim que você passar a fonte, eles são substituídos pelos dados de verdade, sem mudar o visual.
+    ${topBarHTML('Painéis da área', 'Logística', null)}
+    <div class="empty-state" style="padding:64px 24px">
+      <svg viewBox="0 0 24 24" fill="none" stroke="var(--n2)" stroke-width="1.6" style="width:40px;height:40px;margin-bottom:14px"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/></svg>
+      <div style="color:var(--ink);font-size:15px;font-weight:700;margin-bottom:6px">Painel em construção</div>
+      <div style="max-width:420px;margin:0 auto">Estamos preparando os indicadores oficiais de Logística. Assim que a fonte de dados for conectada, este painel é liberado.</div>
     </div>
-    ${secaoCustoRotaHTML(D)}
   `;
 }
 
