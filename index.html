@@ -18,9 +18,8 @@
     --ink-dim:#8a97c4;
     --ink-faint:#5a6796;
     --accent:#3b82f6;
-    /* níveis N1 (pior) -> N4 (melhor) — tons vivos de vermelho/laranja/verde, pra contrastar no fundo escuro.
-       N3/N4 mais escuros que um verde-claro comum, senão o número branco do badge some. */
-    --n1:#ff4757; --n2:#ffa502; --n3:#2bbd72; --n4:#1c9550;
+    /* níveis N1 (pior) -> N4 (melhor) — tons vivos de vermelho/laranja/verde, pra contrastar no fundo escuro */
+    --n1:#ff4757; --n2:#ffa502; --n3:#7bed9f; --n4:#2ed573;
   }
   :root[data-theme="light"]{
     --bg:#eef1f7;
@@ -34,6 +33,9 @@
     --accent:#2f5fd0;
     --n1:#c81e1e; --n2:#a3450a; --n3:#15803d; --n4:#166534;
   }
+  /* Visão Consolidada: badge com número branco em cima do verde — precisa de um verde mais
+     escuro que o padrão (usado nos gráficos das áreas) pra não lavar o contraste do texto. */
+  .geral-view{ --n3:#2bbd72; --n4:#1c9550; }
   *{box-sizing:border-box;margin:0;padding:0}
   html,body{height:100%}
   body{
@@ -214,6 +216,9 @@
     display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;
     padding:14px 18px;color:var(--ink-faint);font-size:11px;border-top:1px solid var(--line);
   }
+  @keyframes statusPulse{0%,100%{box-shadow:0 0 0 0 color-mix(in srgb, var(--n4) 55%, transparent)}50%{box-shadow:0 0 0 4px transparent}}
+  .status-conectado{display:inline-flex;align-items:center;color:var(--ink-dim);font-weight:600;margin-right:10px}
+  .status-dot{display:inline-block;width:7px;height:7px;border-radius:50%;background:var(--n4);margin-right:6px;animation:statusPulse 2s ease-in-out infinite}
   .legend{display:flex;align-items:center;gap:14px;flex-wrap:wrap}
   .legend .lg{display:flex;align-items:center;gap:6px}
   .legend .sw{width:22px;height:11px;border-radius:3px}
@@ -914,7 +919,8 @@ function topBarHTML(eyebrow, title, pillText, extraControlsHTML){
 }
 function setStamp(){
   const el = document.getElementById("stamp");
-  if(el) el.textContent = "Atualizado em "+ new Date().toLocaleString("pt-BR",{day:"2-digit",month:"2-digit",year:"numeric",hour:"2-digit",minute:"2-digit"});
+  const hora = new Date().toLocaleString("pt-BR",{day:"2-digit",month:"2-digit",year:"numeric",hour:"2-digit",minute:"2-digit"});
+  if(el) el.innerHTML = `<span class="status-conectado"><span class="status-dot"></span>Conectado</span>Atualizado em ${hora}`;
 }
 function rollupArea(grp){
   const niveis = grp.kpis.map(k=>nivel(valorEfetivo(k),k)).filter(Boolean);
