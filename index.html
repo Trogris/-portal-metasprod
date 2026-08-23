@@ -144,6 +144,10 @@
   @keyframes pulseRing{0%{transform:scale(1);opacity:.85}100%{transform:scale(1.9);opacity:0}}
   .pulse-ring{transform-box:fill-box;transform-origin:center;animation:pulseRing 1.7s ease-out infinite}
 
+  /* ---------- Card "carregando" enquanto busca a planilha ---------- */
+  @keyframes spin{to{transform:rotate(360deg)}}
+  .card-spinner{width:13px;height:13px;border:2px solid var(--line);border-top-color:var(--accent);border-radius:50%;display:inline-block;animation:spin .8s linear infinite;vertical-align:-2px;margin-right:7px}
+
   /* ---------- Table ---------- */
   .tablewrap{
     background:var(--panel);border:1px solid var(--line);
@@ -491,6 +495,11 @@ function setFiltroMes(v){
 function valorEfetivo(kpi){
   return filtroMes!=null ? kpi.meses[filtroMes] : kpi.atual;
 }
+// "Realizado" = média simples dos meses já postados no ano (soma / quantidade), não só o último mês
+function mediaMeses(meses){
+  const vals = (meses||[]).filter(v=>v!=null);
+  return vals.length ? vals.reduce((a,b)=>a+b,0)/vals.length : null;
+}
 
 /* =====================================================================
    ADERÊNCIA À PROGRAMAÇÃO — única fonte já conectada (planilha oficial
@@ -586,6 +595,10 @@ async function calcularAderenciaPrograma(){
     if(mes){ (porMes[mes] = porMes[mes]||[]).push(pct); }
   });
 
+  // Aderência de cada mês = média da razão ACUMULADA (desde jan) nas semanas daquele mês.
+  // Testamos usar só Real/Prev do próprio mês, mas com denominadores pequenos por semana
+  // isso gera índices absurdos (>150%) quando uma semana de poucos itens previstos tem
+  // produção normal. A razão acumulada suaviza esse ruído e fica sempre plausível (<=100%).
   const meses = MESES_ORDEM.map(m=>{
     const arr = porMes[m];
     return arr && arr.length ? arr.reduce((a,b)=>a+b,0)/arr.length : null;
@@ -672,20 +685,46 @@ async function calcularDadosEstoqueMatriz(){
   const json = await fetchGvizJSON(ESTOQUE_SHEET_ID, ESTOQUE_SHEET_ABA);
   const rows = (json.table.rows||[]).map(r=>r.c||[]);
   const meses = Array(12).fill(null);
-  if(!rows.length) return { atual:null, meses };
+  const vazio = { atual:null, meses, colunas:[] };
+  if(!rows.length) return vazio;
 
   const headerRow = rows.find(r => r.slice(5,12).some(c => parseMesAbrevEstoque(c&&c.f)!=null));
   const resultRow = rows[rows.length-1]; // resultado final (%) sempre na última linha da aba
-  if(headerRow && resultRow){
-    for(let col=5; col<=11; col++){
-      const idx = parseMesAbrevEstoque(headerRow[col] && headerRow[col].f);
-      const v = resultRow[col] && typeof resultRow[col].v==='number' ? resultRow[col].v : null;
-      if(idx!=null && v!=null) meses[idx] = v*100;
-    }
+  if(!headerRow || !resultRow) return vazio;
+
+  const numAt = (row,col) => row && row[col] && typeof row[col].v==='number' ? row[col].v : null;
+  const rotulo = r => r && r[4] && r[4].v!=null ? String(r[4].v).trim() : null;
+
+  const itensRow = rows.find(r => rotulo(r) === 'Qtde de itens contados');
+  // cada seção (Qtde/Valor) segue o mesmo padrão de 5 linhas logo abaixo do cabeçalho:
+  // Saldo sistêmico, Saldo Real, Saldo Divergente, % divergência, Peso.
+  function acharSecao(labelSecao){
+    const ini = rows.findIndex(r => rotulo(r) === labelSecao);
+    if(ini<0) return null;
+    return { sistemico: rows[ini+1], real: rows[ini+2], divergente: rows[ini+3], pctRow: rows[ini+4] };
+  }
+  const secQtde = acharSecao('Qtde');
+  const secValor = acharSecao('Valor');
+
+  const colunas = [];
+  for(let col=5; col<=11; col++){
+    const idx = parseMesAbrevEstoque(headerRow[col] && headerRow[col].f);
+    if(idx==null) continue;
+    const resultado = numAt(resultRow,col);
+    if(resultado!=null) meses[idx] = resultado*100;
+    const itensContados = itensRow ? numAt(itensRow,col) : null;
+    if(itensContados==null && resultado==null) continue; // mês sem nenhum dado ainda
+    colunas.push({
+      idx, label: MESES_ORDEM[idx]+'/26',
+      itensContados,
+      qtde: secQtde ? { sistemico:numAt(secQtde.sistemico,col), real:numAt(secQtde.real,col), divergente:numAt(secQtde.divergente,col), pct:numAt(secQtde.pctRow,col) } : null,
+      valor: secValor ? { sistemico:numAt(secValor.sistemico,col), real:numAt(secValor.real,col), divergente:numAt(secValor.divergente,col), pct:numAt(secValor.pctRow,col) } : null,
+      resultado: resultado!=null ? resultado*100 : null,
+    });
   }
   const preenchidos = meses.map((v,i)=>({v,i})).filter(x=>x.v!=null);
   const atual = preenchidos.length ? preenchidos[preenchidos.length-1].v : null;
-  return { atual, meses };
+  return { atual, meses, colunas };
 }
 let dadosEstoqueMatriz = null;
 let dadosEstoqueMatrizPromise = null;
@@ -1050,7 +1089,7 @@ function sparklineSVG(kpi){
 }
 function miDashboardHTML(grp, d){
   const kpiEstoque = grp.kpis[0];
-  const n = nivel(kpiEstoque.atual, kpiEstoque);
+  const n = nivel(kpiEstoque.recente, kpiEstoque);
   const corRecup = d.indiceRecuperacao!=null && d.indiceRecuperacao>=75 ? 'var(--n4)' : d.indiceRecuperacao>=60 ? 'var(--n2)' : 'var(--n1)';
   const kpiCards = [
     { lbl:'Peças avaliadas', val: d.totalPecas.toLocaleString('pt-BR'), cor:'var(--accent)',
@@ -1061,7 +1100,7 @@ function miDashboardHTML(grp, d){
       icon:'<path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/>' },
     { lbl:'Valor Sucateado', val: fmtGrande(d.totSuc), cor:'var(--n1)',
       icon:'<path d="M3 6h18M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2m3 0-1 14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2L4 6"/>' },
-    { lbl:'Saldo Armazém MI', val: fmt(kpiEstoque.atual,'R$'), badge: n, cor: n?corNivel(n):'var(--accent)',
+    { lbl:'Saldo Armazém MI', val: fmt(kpiEstoque.recente,'R$'), badge: n, cor: n?corNivel(n):'var(--accent)',
       icon:'<path d="M21 8V5a1 1 0 0 0-.5-.87l-7.5-4.3a2 2 0 0 0-2 0L3.5 4.13A1 1 0 0 0 3 5v14a1 1 0 0 0 .5.87l7.5 4.3a2 2 0 0 0 2 0"/><path d="M3.3 7 12 12l8.7-5M12 22V12"/>' },
   ];
   return `
@@ -1324,15 +1363,15 @@ function insightProducaoHTML(d, kpi){
   if(!pior) return '';
   const n = nivel(pior.pct, kpi);
   if(n==='n3' || n==='n4' || !n) return '';
-  const nGeral = nivel(kpi.atual, kpi);
+  const nGeral = nivel(kpi.recente, kpi);
   const peso = d.totalPrevisto>0 ? (pior.previsto/d.totalPrevisto*100) : null;
   return `<div class="insight-card" style="--bar:${corNivel(n)}">
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><path d="M12 9v4M12 17h.01"/></svg>
-    <div><b>${pior.nome}</b> está com apenas <b style="color:${corNivel(n)}">${pior.pct.toFixed(0)}%</b> de aderência${peso!=null?` e responde por <b>${peso.toFixed(0)}%</b> de todo o previsto da rede`:''} — é o principal responsável por puxar a Aderência geral para <b style="color:${nGeral?corNivel(nGeral):'var(--ink)'}">${nGeral?nGeral.toUpperCase():fmt(kpi.atual,kpi.unidade)}</b>.</div>
+    <div><b>${pior.nome}</b> está com apenas <b style="color:${corNivel(n)}">${pior.pct.toFixed(0)}%</b> de aderência${peso!=null?` e responde por <b>${peso.toFixed(0)}%</b> de todo o previsto da rede`:''} — é o principal responsável por puxar a Aderência geral para <b style="color:${nGeral?corNivel(nGeral):'var(--ink)'}">${nGeral?nGeral.toUpperCase():fmt(kpi.recente,kpi.unidade)}</b>.</div>
   </div>`;
 }
 function producaoDashboardHTML(kpi, d){
-  const n = nivel(kpi.atual, kpi);
+  const n = nivel(kpi.recente, kpi);
   const mesesComDado = d.producaoMensal.filter(v=>v!=null);
   const mediaMensal = mesesComDado.length ? d.totalProduzido/mesesComDado.length : null;
   const gap = (d.totalProduzido!=null && d.totalPrevisto!=null) ? d.totalProduzido - d.totalPrevisto : null;
@@ -1342,7 +1381,7 @@ function producaoDashboardHTML(kpi, d){
   const kpiCards = [
     { lbl:'Total Eq. Produzidos', val: d.totalProduzido!=null?Math.round(d.totalProduzido).toLocaleString('pt-BR'):'–', cor:'var(--accent)',
       icon:'<path d="M21 8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16Z"/><path d="m3.3 7 8.7 5 8.7-5"/><path d="M12 22V12"/>' },
-    { lbl:'Aderência à Programação', val: fmt(kpi.atual,kpi.unidade), badge:n, cor: n?corNivel(n):'var(--accent)',
+    { lbl:'Aderência à Programação', val: fmt(kpi.recente,kpi.unidade), badge:n, cor: n?corNivel(n):'var(--accent)',
       icon:'<path d="M3 3v18h18"/><path d="m19 9-5 5-4-4-3 3"/>' },
     { lbl:'Gap (Real. − Prev.)', val: gapTxt, cor: gapCor,
       icon:'<path d="M3 3v18h18"/><path d="m19 9-5 5-4-4-3 3"/><path d="M15 9h4v4"/>' },
@@ -1864,19 +1903,88 @@ function secaoParadosHTML(D){
   `;
 }
 
+function estoqueAcuraciaRealHTML(kpi, d){
+  const cols = d.colunas || [];
+  if(!cols.length) return '<div class="empty-state">Ainda sem meses fechados na planilha de Acuracidade do Estoque.</div>';
+  const ultima = cols[cols.length-1];
+  const n = nivel(kpi.recente, kpi);
+
+  const kpiCards = [
+    { lbl:'Acuracidade do Estoque', val: fmt(kpi.recente,'%'), badge:n, cor: n?corNivel(n):'var(--accent)',
+      icon:'<path d="M21 8V5a1 1 0 0 0-.5-.87l-7.5-4.3a2 2 0 0 0-2 0L3.5 4.13A1 1 0 0 0 3 5v14a1 1 0 0 0 .5.87l7.5 4.3a2 2 0 0 0 2 0"/><path d="M3.3 7 12 12l8.7-5M12 22V12"/>' },
+    { lbl:'Itens Contados (mês)', val: ultima.itensContados!=null?ultima.itensContados.toLocaleString('pt-BR'):'–', cor:'var(--accent)',
+      icon:'<path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/>' },
+    { lbl:'Divergência Qtde (peso 30%)', val: ultima.qtde&&ultima.qtde.pct!=null?(ultima.qtde.pct*100).toFixed(1)+'%':'–', cor:'var(--n2)',
+      icon:'<path d="M3 3v18h18"/><path d="m19 9-5 5-4-4-3 3"/>' },
+    { lbl:'Divergência Valor (peso 70%)', val: ultima.valor&&ultima.valor.pct!=null?(ultima.valor.pct*100).toFixed(1)+'%':'–', cor:'var(--n2)',
+      icon:'<path d="M3 3v18h18"/><path d="m19 9-5 5-4-4-3 3"/>' },
+  ];
+
+  const rows = cols.map(c=>{
+    const nMes = nivel(c.resultado, kpi);
+    const cor = nMes?corNivel(nMes):'var(--ink-faint)';
+    return `<tr>
+      <td class="name">${c.label}</td>
+      <td class="num dim">${c.itensContados!=null?c.itensContados.toLocaleString('pt-BR'):'–'}</td>
+      <td class="num dim">${c.qtde&&c.qtde.sistemico!=null?c.qtde.sistemico.toLocaleString('pt-BR'):'–'}</td>
+      <td class="num dim">${c.qtde&&c.qtde.real!=null?c.qtde.real.toLocaleString('pt-BR'):'–'}</td>
+      <td class="num dim">${c.qtde&&c.qtde.pct!=null?(c.qtde.pct*100).toFixed(2)+'%':'–'}</td>
+      <td class="num dim">${c.valor&&c.valor.pct!=null?(c.valor.pct*100).toFixed(2)+'%':'–'}</td>
+      <td class="num" style="color:${cor};font-weight:700">${c.resultado!=null?c.resultado.toFixed(2)+'%':'–'}</td>
+      <td class="desemp" style="color:${cor}">${nMes?nMes.toUpperCase():'–'}</td>
+    </tr>`;
+  }).join('');
+
+  return `
+    <div class="mi-kpis">
+      ${kpiCards.map(c=>`
+        <div class="mi-kpi" style="--bar:${c.cor}">
+          <div class="lbl"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${c.icon}</svg>${c.lbl}</div>
+          <div class="val">${c.val}${c.badge?` <span class="tier-badge" style="background:${corNivel(c.badge)}">${c.badge.toUpperCase()}</span>`:''}</div>
+        </div>`).join("")}
+    </div>
+    <div class="panel" onclick="togglePanel(this)">
+      <h3><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 3v18h18"/><path d="m19 9-5 5-4-4-3 3"/></svg>Acuracidade do Estoque — mês a mês, 2026${EXPAND_IC}</h3>
+      ${sparklineSVG(kpi)}
+    </div>
+    <div class="tablewrap" style="margin-top:14px">
+      <div class="scroll">
+        <table>
+          <thead><tr><th class="name">Mês</th><th>Itens Contados</th><th>Saldo Sist. (Qtde)</th><th>Saldo Real (Qtde)</th><th>Diverg. Qtde</th><th>Diverg. Valor</th><th>Acuracidade</th><th>Nível</th></tr></thead>
+          <tbody>${rows}</tbody>
+        </table>
+      </div>
+      <div class="foot">${legendHTML()}<div>Peso: Qtde 30% · Valor 70%</div></div>
+    </div>
+    <div class="foot-note">Dados calculados ao vivo a partir da planilha "Indicador Estoque Matriz" (aba "Estoque - CD") — saldo sistêmico vs. real, por quantidade e por valor. <a href="${ESTOQUE_SHEET_URL}" target="_blank" style="color:var(--accent)">Abrir planilha completa ↗</a></div>
+  `;
+}
 function viewEstoqueMatriz(){
   const D = DADOS_ESTOQUE_EXEMPLO;
+  const kpi = METAS[2].kpis[0];
   document.getElementById('view-root').innerHTML = `
     ${topBarHTML('Painéis da área', 'Estoque', null)}
-    <div class="empty-state" style="border:1px dashed var(--n2);color:var(--ink);margin-bottom:18px">
-      <b style="color:var(--n2)">Modelo com dados fictícios</b> — os números abaixo são só um exemplo de layout, ainda não vêm de nenhuma planilha real. Assim que você passar a fonte, eles são substituídos pelos dados de verdade, sem mudar o visual.
-    </div>
-    ${secaoAcuraciaHTML(D.acuracia)}
+    <div id="estoque-acuracia">${dadosEstoqueMatriz ? estoqueAcuraciaRealHTML(kpi, dadosEstoqueMatriz) : '<div class="mi-loading">Carregando dados de Acuracidade do Estoque…</div>'}</div>
     <hr class="sec-sep">
+    <div class="empty-state" style="border:1px dashed var(--n2);color:var(--ink);margin-bottom:18px">
+      <b style="color:var(--n2)">Giro de Estoque e Itens Parados abaixo são um modelo com dados fictícios</b> — só um exemplo de layout, ainda não vêm de planilha real. Assim que você passar a fonte, eles são substituídos pelos dados de verdade, sem mudar o visual.
+    </div>
     ${secaoGiroHTML(D.giro)}
     <hr class="sec-sep">
     ${secaoParadosHTML(D.parados)}
   `;
+  if(!dadosEstoqueMatriz){
+    getDadosEstoqueMatriz().then(d=>{
+      if(currentView === 'Estoque'){
+        const el = document.getElementById('estoque-acuracia');
+        if(el) el.innerHTML = estoqueAcuraciaRealHTML(kpi, d);
+      }
+    }).catch(e=>{
+      console.error('Erro ao buscar dados de Acuracidade do Estoque:', e);
+      const el = document.getElementById('estoque-acuracia');
+      if(el) el.innerHTML = '<div class="empty-state">Não foi possível carregar os dados agora. Tente recarregar a página.</div>';
+    });
+  }
 }
 
 /* =====================================================================
@@ -2233,8 +2341,7 @@ function viewLogisticaMatriz(){
     ${topBarHTML('Painéis da área', 'Logística', null)}
     <div class="empty-state" style="padding:64px 24px">
       <svg viewBox="0 0 24 24" fill="none" stroke="var(--n2)" stroke-width="1.6" style="width:40px;height:40px;margin-bottom:14px"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/></svg>
-      <div style="color:var(--ink);font-size:15px;font-weight:700;margin-bottom:6px">Painel em construção</div>
-      <div style="max-width:420px;margin:0 auto">Estamos preparando os indicadores oficiais de Logística. Assim que a fonte de dados for conectada, este painel é liberado.</div>
+      <div style="color:var(--ink);font-size:15px;font-weight:700">Painel em construção</div>
     </div>
   `;
 }
@@ -2242,15 +2349,21 @@ function viewLogisticaMatriz(){
 function renderCards(areas){
   const el = document.getElementById("cards");
   if(!el) return;
-  el.innerHTML = areas.map(a=>`
+  el.innerHTML = areas.map(a=>{
+    const carregando = carregandoAreas.has(a.area);
+    const valHTML = a.nivel
+      ? `${fmt(valorEfetivo(a.kpiRef),a.kpiRef.unidade)} <span class="tier-badge" style="background:${corNivel(a.nivel)}">${a.nivel.toUpperCase()}</span>`
+      : carregando
+        ? `<span style="font-size:13px;color:var(--ink-faint);font-weight:500"><span class="card-spinner"></span>Carregando…</span>`
+        : `<span style="font-size:14px;color:var(--ink-faint);font-weight:500">Pendente</span>`;
+    const subHTML = a.nivel ? a.kpiRef.nome : (carregando ? 'buscando dado na planilha…' : 'nenhum indicador conectado ainda');
+    return `
     <div class="card" style="--bar:${a.cor}">
       <div class="lbl">${areaIcon(a.area,true)}${a.area}</div>
-      <div class="val">
-        ${a.nivel ? `${fmt(valorEfetivo(a.kpiRef),a.kpiRef.unidade)} <span class="tier-badge" style="background:${corNivel(a.nivel)}">${a.nivel.toUpperCase()}</span>` : `<span style="font-size:14px;color:var(--ink-faint);font-weight:500">Pendente</span>`}
-      </div>
-      <div class="sub">${a.nivel ? a.kpiRef.nome : 'nenhum indicador conectado ainda'}</div>
-    </div>
-  `).join("");
+      <div class="val">${valHTML}</div>
+      <div class="sub">${subHTML}</div>
+    </div>`;
+  }).join("");
 }
 
 function areaIcon(area,small){
@@ -2266,30 +2379,36 @@ function areaIcon(area,small){
   return `<svg viewBox="0 0 24 24" ${s} fill="none" stroke="currentColor" stroke-width="2" style="vertical-align:-2px;margin-right:6px">${map[area]||""}</svg>`;
 }
 
+// áreas cuja busca na planilha ainda está em andamento — controla o "Carregando…" nos cards
+const carregandoAreas = new Set(METAS.map(m=>m.area));
+
 async function init(){
   if(sidebarCollapsed) document.getElementById('sidebar').classList.add('collapsed');
-  render(); // primeiro render com tudo pendente, pra tela não ficar em branco
+  render(); // primeiro render com tudo carregando, pra tela não ficar em branco
 
   getDadosProducao().then(({atual,meses})=>{
     const kpi = METAS[0].kpis[0];
-    kpi.atual = atual;
     kpi.meses = meses;
-    render();
-  }).catch(e=>console.error('Erro ao buscar Aderência à Programação:', e));
+    kpi.recente = atual; // valor mais recente — usado só na própria página de Produção
+    kpi.atual = mediaMeses(meses); // Realizado (Visão Consolidada/Matriz) = média dos meses já postados no ano
+  }).catch(e=>console.error('Erro ao buscar Aderência à Programação:', e))
+    .finally(()=>{ carregandoAreas.delete('Produção'); render(); });
 
   getDadosMI().then(d=>{
     const kpi = METAS[1].kpis[0];
-    kpi.atual = d.estoque.atual;
     kpi.meses = d.estoque.meses;
-    render();
-  }).catch(e=>console.error('Erro ao buscar dados de Manutenção Interna:', e));
+    kpi.recente = d.estoque.atual; // saldo mais recente — usado só na própria página de MI
+    kpi.atual = mediaMeses(d.estoque.meses);
+  }).catch(e=>console.error('Erro ao buscar dados de Manutenção Interna:', e))
+    .finally(()=>{ carregandoAreas.delete('Manutenção Interna'); render(); });
 
   getDadosEstoqueMatriz().then(d=>{
     const kpi = METAS[2].kpis[0];
-    kpi.atual = d.atual;
     kpi.meses = d.meses;
-    render();
-  }).catch(e=>console.error('Erro ao buscar dados de Acuracidade do Estoque:', e));
+    kpi.recente = d.atual;
+    kpi.atual = mediaMeses(d.meses);
+  }).catch(e=>console.error('Erro ao buscar dados de Acuracidade do Estoque:', e))
+    .finally(()=>{ carregandoAreas.delete('Estoque'); render(); });
 
   getDadosFiliais().then(d=>{
     // A acuracidade por base (planilha de Filiais) é só um detalhe operacional dentro
@@ -2297,10 +2416,11 @@ async function init(){
     // O indicador oficial "Acuracidade do Estoque" da Matriz de Metas vem da planilha
     // do CD (getDadosEstoqueMatriz, acima). Aqui só entra Ruptura (Filiais).
     const kRupt = METAS[3].kpis[0];
-    kRupt.atual = d.ruptura;
     d.rupturaMensal.forEach((v,i)=>{ if(v!=null) kRupt.meses[i] = v; });
-    render();
-  }).catch(e=>console.error('Erro ao buscar dados das Filiais:', e));
+    kRupt.recente = d.ruptura;
+    kRupt.atual = mediaMeses(kRupt.meses);
+  }).catch(e=>console.error('Erro ao buscar dados das Filiais:', e))
+    .finally(()=>{ carregandoAreas.delete('Filiais'); render(); });
 }
 init();
 </script>
