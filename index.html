@@ -1031,10 +1031,11 @@ function funnelHTML(total,nRec,nSuc,nEnv){
       <div class="fval" style="color:${r.cor}">${r.val.toLocaleString('pt-BR')}</div>
     </div>`).join("")}</div>`;
 }
-function sparklineSVG(kpi){
+function sparklineSVG(kpi, opts){
+  const o = Object.assign({ h:190, dotR:5, ringR:11, metaEsquerda:false }, opts);
   const pts = kpi.meses.map((v,i)=>({i,v})).filter(p=>p.v!=null);
   if(!pts.length) return '<div class="empty-state">Ainda sem histórico mensal do saldo.</div>';
-  const w=560,h=190,P={l:66,r:26,t:26,b:34};
+  const w=560,h=o.h,P={l:66,r:26,t:26,b:34};
   const vals = pts.map(p=>p.v);
   const meta = kpi.faixas ? metaN4Valor(kpi) : null;
   let lo = Math.min(...vals, ...(meta!=null?[meta]:[])), hi = Math.max(...vals, ...(meta!=null?[meta]:[]));
@@ -1056,8 +1057,10 @@ function sparklineSVG(kpi){
 
   const metaLine = meta!=null ? (()=>{
     const ym = y(meta);
+    const mx = o.metaEsquerda ? P.l : w-P.r;
+    const anchor = o.metaEsquerda ? 'start' : 'end';
     return `<line x1="${P.l}" y1="${ym.toFixed(1)}" x2="${w-P.r}" y2="${ym.toFixed(1)}" stroke="var(--n2)" stroke-width="1.5" stroke-dasharray="5 4" opacity=".9"/>
-      <text x="${w-P.r}" y="${(ym-6).toFixed(1)}" text-anchor="end" fill="var(--n2)" font-size="9.5" font-weight="600">meta N4 · ${fmt(meta,kpi.unidade)}</text>`;
+      <text x="${mx.toFixed(1)}" y="${(ym-6).toFixed(1)}" text-anchor="${anchor}" fill="var(--n2)" font-size="9.5" font-weight="600">meta N4 · ${fmt(meta,kpi.unidade)}</text>`;
   })() : '';
 
   const path = pts.map((p,idx)=>`${idx===0?'M':'L'}${x(idx).toFixed(1)},${y(p.v).toFixed(1)}`).join(' ');
@@ -1069,8 +1072,8 @@ function sparklineSVG(kpi){
     const isFirst = idx===0, isLast = idx===pts.length-1;
     const anchor = isFirst ? 'start' : isLast ? 'end' : 'middle';
     const lx = isFirst ? x(idx)+7 : isLast ? x(idx)-7 : x(idx);
-    const ring = isLast ? `<circle class="pulse-ring" cx="${x(idx).toFixed(1)}" cy="${y(p.v).toFixed(1)}" r="9" fill="none" stroke="var(--accent)" stroke-width="2"/>` : '';
-    return `${ring}<circle cx="${x(idx).toFixed(1)}" cy="${y(p.v).toFixed(1)}" r="4" fill="${corNivel(nv)}" stroke="var(--panel)" stroke-width="1.5"/>
+    const ring = isLast ? `<circle class="pulse-ring" cx="${x(idx).toFixed(1)}" cy="${y(p.v).toFixed(1)}" r="${o.ringR}" fill="none" stroke="var(--accent)" stroke-width="2"/>` : '';
+    return `${ring}<circle cx="${x(idx).toFixed(1)}" cy="${y(p.v).toFixed(1)}" r="${o.dotR}" fill="${corNivel(nv)}" stroke="var(--panel)" stroke-width="1.5"/>
       <text x="${lx.toFixed(1)}" y="${(y(p.v)-10).toFixed(1)}" text-anchor="${anchor}" fill="var(--ink)" font-size="9.5" font-weight="600">${fmt(p.v,kpi.unidade)}</text>`;
   }).join('');
 
@@ -1209,8 +1212,8 @@ function producaoStepSVG(qtyArr, pctArr, kpi){
   const lineDots = linePts.map((p,i)=>{
     const n = nivel(p.v, kpi);
     const isLast = i===linePts.length-1;
-    const ring = isLast ? `<circle class="pulse-ring" cx="${x(p.pos).toFixed(1)}" cy="${yPct(p.v).toFixed(1)}" r="9" fill="none" stroke="var(--accent)" stroke-width="2"/>` : '';
-    return `${ring}<circle cx="${x(p.pos).toFixed(1)}" cy="${yPct(p.v).toFixed(1)}" r="3.5" fill="${corNivel(n)}" stroke="var(--panel)" stroke-width="1.5"/>`;
+    const ring = isLast ? `<circle class="pulse-ring" cx="${x(p.pos).toFixed(1)}" cy="${yPct(p.v).toFixed(1)}" r="11" fill="none" stroke="var(--accent)" stroke-width="2"/>` : '';
+    return `${ring}<circle cx="${x(p.pos).toFixed(1)}" cy="${yPct(p.v).toFixed(1)}" r="${isLast?5:3.5}" fill="${corNivel(n)}" stroke="var(--panel)" stroke-width="1.5"/>`;
   }).join('');
 
   const labels = idxs.map((mi,pos)=>{
@@ -1310,8 +1313,8 @@ function previstoRealizadoAcumSVG(prevArr, realArr, kpi, hojePos){
     const pctMes = previsto>0 ? p.v/previsto*100 : null;
     const nv = pctMes!=null ? nivel(pctMes,kpi) : null;
     const cor = nv?corNivel(nv):'var(--accent)';
-    const ring = isLast ? `<circle class="pulse-ring" cx="${x(p.pos).toFixed(1)}" cy="${y(p.v).toFixed(1)}" r="9" fill="none" stroke="var(--accent)" stroke-width="2"/>` : '';
-    return `${ring}<circle cx="${x(p.pos).toFixed(1)}" cy="${y(p.v).toFixed(1)}" r="4" fill="${cor}" stroke="var(--panel)" stroke-width="1.5"/>
+    const ring = isLast ? `<circle class="pulse-ring" cx="${x(p.pos).toFixed(1)}" cy="${y(p.v).toFixed(1)}" r="11" fill="none" stroke="var(--accent)" stroke-width="2"/>` : '';
+    return `${ring}<circle cx="${x(p.pos).toFixed(1)}" cy="${y(p.v).toFixed(1)}" r="${isLast?5:4}" fill="${cor}" stroke="var(--panel)" stroke-width="1.5"/>
       <text x="${lx.toFixed(1)}" y="${(y(p.v)-10).toFixed(1)}" text-anchor="${anchor}" fill="var(--ink)" font-size="9.5" font-weight="600">${Math.round(p.v)}</text>`;
   }).join('');
 
@@ -1945,7 +1948,7 @@ function estoqueAcuraciaRealHTML(kpi, d){
     </div>
     <div class="panel" onclick="togglePanel(this)">
       <h3><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 3v18h18"/><path d="m19 9-5 5-4-4-3 3"/></svg>Acuracidade do Estoque — mês a mês, 2026${EXPAND_IC}</h3>
-      ${sparklineSVG(kpi)}
+      ${sparklineSVG(kpi, {h:140, dotR:3.5, ringR:7, metaEsquerda:true})}
     </div>
     <div class="tablewrap" style="margin-top:14px">
       <div class="scroll">
