@@ -18,8 +18,9 @@
     --ink-dim:#8a97c4;
     --ink-faint:#5a6796;
     --accent:#3b82f6;
-    /* níveis N1 (pior) -> N4 (melhor) — tons vivos de vermelho/laranja/verde, pra contrastar no fundo escuro */
-    --n1:#ff4757; --n2:#ffa502; --n3:#7bed9f; --n4:#2ed573;
+    /* níveis N1 (pior) -> N4 (melhor) — tons vivos de vermelho/laranja/verde, pra contrastar no fundo escuro.
+       N3/N4 mais escuros que um verde-claro comum, senão o número branco do badge some. */
+    --n1:#ff4757; --n2:#ffa502; --n3:#2bbd72; --n4:#1c9550;
   }
   :root[data-theme="light"]{
     --bg:#eef1f7;
@@ -80,6 +81,10 @@
   .paineis-list{overflow:hidden;max-height:0;transition:max-height .2s ease}
   .paineis-list.open{max-height:220px}
   .side.collapsed .paineis-list{max-height:220px}
+  .areas-list{overflow:hidden;max-height:0;transition:max-height .2s ease}
+  .areas-list.open{max-height:400px}
+  .side.collapsed .areas-list{max-height:400px}
+  .nav.ext.nav-loading{cursor:wait;opacity:.75}
   .nav{
     display:flex;align-items:center;gap:10px;
     padding:9px 10px;border-radius:9px;color:var(--ink-dim);
@@ -361,18 +366,21 @@
     </div>
     <div class="cap">Painel</div>
     <div class="nav" data-view="geral" onclick="setView('geral')" title="Visão consolidada"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg><span class="label">Visão consolidada</span><span class="dot"></span></div>
-    <div class="cap">Áreas</div>
-    <div class="nav" data-view="Produção" onclick="setView('Produção')" title="Produção"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 20a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V8l-7 5V8l-7 5V4l-6 5Z"/><path d="M17 18h1"/><path d="M12 18h1"/><path d="M7 18h1"/></svg><span class="label">Produção</span></div>
-    <div class="nav" data-view="Manutenção Interna" onclick="setView('Manutenção Interna')" title="Manutenção Interna"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14.7 6.3a4 4 0 0 0-5.4 5.4L3 18v3h3l6.3-6.3a4 4 0 0 0 5.4-5.4l-2.1 2.1-2-2 2.1-2.1z"/></svg><span class="label">Manutenção Interna</span></div>
-    <div class="nav" data-view="Estoque" onclick="setView('Estoque')" title="Estoque"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 9h18M3 9v10a1 1 0 0 0 1 1h16a1 1 0 0 0 1-1V9M3 9l2-5h14l2 5"/><path d="M9 13h6"/></svg><span class="label">Estoque</span></div>
-    <div class="nav" data-view="Filiais" onclick="setView('Filiais')" title="Filiais"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 8V5a1 1 0 0 0-.5-.87l-7.5-4.3a2 2 0 0 0-2 0L3.5 4.13A1 1 0 0 0 3 5v14a1 1 0 0 0 .5.87l7.5 4.3a2 2 0 0 0 2 0"/><path d="M3.3 7 12 12l8.7-5M12 22V12"/></svg><span class="label">Filiais</span></div>
-    <div class="nav" data-view="Logística" onclick="setView('Logística')" title="Logística"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 3h15v13H1z"/><path d="M16 8h4l3 3v5h-7z"/><circle cx="5.5" cy="18.5" r="2.5"/><circle cx="18.5" cy="18.5" r="2.5"/></svg><span class="label">Logística</span></div>
-    <div class="nav" data-view="Plano de Ação" onclick="setView('Plano de Ação')" title="Plano de Ação"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="8" y="2" width="8" height="4" rx="1"/><path d="M9 2H5a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V4a2 2 0 0 0-2-2h-4"/><path d="M9 12h6M9 16h6"/></svg><span class="label">Plano de Ação</span></div>
+    <div class="cap toggle open" id="areas-cap" onclick="toggleAreas()">Áreas<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg></div>
+    <div class="areas-list open" id="areas-list">
+      <div class="nav" data-view="Produção" onclick="setView('Produção')" title="Produção"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 20a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V8l-7 5V8l-7 5V4l-6 5Z"/><path d="M17 18h1"/><path d="M12 18h1"/><path d="M7 18h1"/></svg><span class="label">Produção</span></div>
+      <div class="nav" data-view="Manutenção Interna" onclick="setView('Manutenção Interna')" title="Manutenção Interna"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14.7 6.3a4 4 0 0 0-5.4 5.4L3 18v3h3l6.3-6.3a4 4 0 0 0 5.4-5.4l-2.1 2.1-2-2 2.1-2.1z"/></svg><span class="label">Manutenção Interna</span></div>
+      <div class="nav" data-view="Estoque" onclick="setView('Estoque')" title="Estoque"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 9h18M3 9v10a1 1 0 0 0 1 1h16a1 1 0 0 0 1-1V9M3 9l2-5h14l2 5"/><path d="M9 13h6"/></svg><span class="label">Estoque</span></div>
+      <div class="nav" data-view="Filiais" onclick="setView('Filiais')" title="Filiais"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 8V5a1 1 0 0 0-.5-.87l-7.5-4.3a2 2 0 0 0-2 0L3.5 4.13A1 1 0 0 0 3 5v14a1 1 0 0 0 .5.87l7.5 4.3a2 2 0 0 0 2 0"/><path d="M3.3 7 12 12l8.7-5M12 22V12"/></svg><span class="label">Filiais</span></div>
+      <div class="nav" data-view="Logística" onclick="setView('Logística')" title="Logística"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 3h15v13H1z"/><path d="M16 8h4l3 3v5h-7z"/><circle cx="5.5" cy="18.5" r="2.5"/><circle cx="18.5" cy="18.5" r="2.5"/></svg><span class="label">Logística</span></div>
+      <div class="nav" data-view="Plano de Ação" onclick="setView('Plano de Ação')" title="Plano de Ação"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="8" y="2" width="8" height="4" rx="1"/><path d="M9 2H5a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V4a2 2 0 0 0-2-2h-4"/><path d="M9 12h6M9 16h6"/></svg><span class="label">Plano de Ação</span></div>
+    </div>
     <div class="cap toggle" id="paineis-completos-cap" onclick="togglePaineisCompletos()">Painéis completos<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg></div>
     <div class="paineis-list" id="paineis-completos-list">
-      <div class="nav ext" onclick="window.open('https://cronograma-producao-psi.vercel.app/','_blank')" title="Cronograma de Produção"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg><span class="label">Cronograma de Produção</span></div>
-      <div class="nav ext" onclick="window.open('https://dash-producao-plum.vercel.app/','_blank')" title="Acompanhamento da Produção"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 3v18h18"/><path d="M18 17V9M13 17V5M8 17v-4"/></svg><span class="label">Acompanhamento da Produção</span></div>
-      <div class="nav ext" onclick="window.open('https://inspecao-veicular-nu.vercel.app/gestor.html','_blank')" title="Painel do Gestor — Inspeção Veicular"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10 17h4V5H2v12h3"/><path d="M20 17h2v-3.34a4 4 0 0 0-1.17-2.83L19 9h-5v8h1"/><circle cx="7.5" cy="17.5" r="2.5"/><circle cx="17.5" cy="17.5" r="2.5"/></svg><span class="label">Painel do Gestor (Frota)</span></div>
+      <div class="nav ext" onclick="abrirPainelExterno(this,'https://cronograma-producao-psi.vercel.app/')" title="Cronograma de Produção"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg><span class="label">Cronograma de Produção</span></div>
+      <div class="nav ext" onclick="abrirPainelExterno(this,'https://dash-producao-plum.vercel.app/')" title="Acompanhamento da Produção"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 3v18h18"/><path d="M18 17V9M13 17V5M8 17v-4"/></svg><span class="label">Acompanhamento da Produção</span></div>
+      <div class="nav ext" onclick="abrirPainelExterno(this,'https://inspecao-veicular-nu.vercel.app/gestor.html')" title="Painel do Gestor — Inspeção Veicular"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10 17h4V5H2v12h3"/><path d="M20 17h2v-3.34a4 4 0 0 0-1.17-2.83L19 9h-5v8h1"/><circle cx="7.5" cy="17.5" r="2.5"/><circle cx="17.5" cy="17.5" r="2.5"/></svg><span class="label">Painel do Gestor (Frota)</span></div>
+      <div class="nav ext" onclick="abrirPainelExterno(this,'https://youtrack-dashboard-navy.vercel.app/')" title="Dashboard YouTrack"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="9" rx="1"/><rect x="14" y="3" width="7" height="5" rx="1"/><rect x="14" y="12" width="7" height="9" rx="1"/><rect x="3" y="16" width="7" height="5" rx="1"/></svg><span class="label">Dashboard YouTrack</span></div>
     </div>
   </aside>
 
@@ -404,6 +412,27 @@ function togglePaineisCompletos(){
   paineisCompletosOpen = !paineisCompletosOpen;
   document.getElementById('paineis-completos-cap').classList.toggle('open', paineisCompletosOpen);
   document.getElementById('paineis-completos-list').classList.toggle('open', paineisCompletosOpen);
+}
+
+let areasOpen = true;
+function toggleAreas(){
+  areasOpen = !areasOpen;
+  document.getElementById('areas-cap').classList.toggle('open', areasOpen);
+  document.getElementById('areas-list').classList.toggle('open', areasOpen);
+}
+
+// dá um feedback local (spinner + texto) enquanto a nova aba do painel externo abre —
+// window.open não deixa a gente saber quando a página de fora terminou de carregar,
+// então isso é só pra não parecer que nada aconteceu no clique.
+function abrirPainelExterno(el, url){
+  const label = el.querySelector('.label');
+  if(label && !el.classList.contains('nav-loading')){
+    const original = label.textContent;
+    el.classList.add('nav-loading');
+    label.innerHTML = '<span class="card-spinner"></span>Abrindo painel…';
+    setTimeout(()=>{ el.classList.remove('nav-loading'); label.textContent = original; }, 1200);
+  }
+  window.open(url, '_blank');
 }
 
 // ── NAVEGAÇÃO ENTRE TELAS: visão geral (todas as áreas) ou uma área específica ──
@@ -1115,11 +1144,11 @@ function miDashboardHTML(grp, d){
         </div>`).join("")}
     </div>
     <div class="mi-panels">
-      <div class="panel" onclick="togglePanel(this)"><h3><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 3v18h18"/><path d="m19 9-5 5-4-4-3 3"/></svg>Saldo Armazém MI (R$) — mês a mês, 2026${EXPAND_IC}</h3>${sparklineSVG(kpiEstoque)}</div>
+      <div class="panel" onclick="togglePanel(this)"><h3><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 3v18h18"/><path d="m19 9-5 5-4-4-3 3"/></svg>Saldo Armazém MI (R$)${EXPAND_IC}</h3>${sparklineSVG(kpiEstoque)}</div>
       <div class="panel" onclick="togglePanel(this)"><h3><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21.2 15.9A10 10 0 1 1 8 2.8"/><path d="M22 12A10 10 0 0 0 12 2v10z"/></svg>Destinação das peças${EXPAND_IC}</h3>${donutHTML(d.nRec,d.nSuc,d.nEnv)}</div>
     </div>
     <div class="mi-panels-2">
-      <div class="panel" onclick="togglePanel(this)"><h3><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 3v18h18"/><rect x="7" y="10" width="3" height="8"/><rect x="12" y="6" width="3" height="12"/><rect x="17" y="13" width="3" height="5"/></svg>Peças recuperadas vs sucateadas (R$) — 2026${EXPAND_IC}</h3>${barsMesHTML(d.serieMensal)}</div>
+      <div class="panel" onclick="togglePanel(this)"><h3><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 3v18h18"/><rect x="7" y="10" width="3" height="8"/><rect x="12" y="6" width="3" height="12"/><rect x="17" y="13" width="3" height="5"/></svg>Peças recuperadas vs sucateadas (R$)${EXPAND_IC}</h3>${barsMesHTML(d.serieMensal)}</div>
       <div class="panel" onclick="togglePanel(this)"><h3><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 21H4a1 1 0 0 1-1-1V3"/><path d="m5 15 4-4 3 3 5-6"/></svg>Peças avaliadas por categoria${EXPAND_IC}</h3>${funnelHTML(d.totalPecas,d.nRec,d.nSuc,d.nEnv)}</div>
     </div>
     <div class="foot-note">Dados calculados ao vivo a partir das abas mensais da planilha "Custos - Manutenção Interna 2026" (peça a peça + saldo do armazém). <a href="${MI_SHEET_URL}" target="_blank" style="color:var(--accent)">Abrir planilha completa ↗</a></div>
@@ -1302,7 +1331,7 @@ function previstoRealizadoAcumSVG(prevArr, realArr, kpi, hojePos){
     const atrasado = (a.v<=pa.v) || (b.v<=pb.v);
     const cor = atrasado ? 'var(--n1)' : 'var(--n4)';
     const seg = `M${x(a.pos).toFixed(1)},${y(a.v).toFixed(1)} L${x(b.pos).toFixed(1)},${y(b.v).toFixed(1)} L${x(b.pos).toFixed(1)},${y(pb.v).toFixed(1)} L${x(a.pos).toFixed(1)},${y(pa.v).toFixed(1)} Z`;
-    areaSegs += `<path d="${seg}" fill="${cor}" opacity=".16"/>`;
+    areaSegs += `<path d="${seg}" fill="${cor}" opacity=".38"/>`;
   }
 
   const realDots = realPts.map((p,i)=>{
@@ -1321,8 +1350,8 @@ function previstoRealizadoAcumSVG(prevArr, realArr, kpi, hojePos){
   let hojeLine = '';
   if(hojePos!=null){
     const hx = x(Math.max(idxs[0], Math.min(idxs[idxs.length-1], hojePos)));
-    hojeLine = `<line x1="${hx.toFixed(1)}" y1="${P.t}" x2="${hx.toFixed(1)}" y2="${h-P.b}" stroke="var(--ink-faint)" stroke-width="1.5" stroke-dasharray="4 4" opacity=".85"/>
-      <text x="${hx.toFixed(1)}" y="${P.t-10}" text-anchor="middle" fill="var(--ink)" font-size="10.5" font-weight="700">hoje</text>`;
+    hojeLine = `<line x1="${hx.toFixed(1)}" y1="${P.t}" x2="${hx.toFixed(1)}" y2="${h-P.b}" stroke="var(--n2)" stroke-width="1.5" stroke-dasharray="4 4" opacity=".9"/>
+      <text x="${hx.toFixed(1)}" y="${P.t-10}" text-anchor="middle" fill="var(--n2)" font-size="10.5" font-weight="700">hoje</text>`;
   }
 
   return `<svg viewBox="0 0 ${w} ${h}" style="width:100%;height:auto;display:block">
