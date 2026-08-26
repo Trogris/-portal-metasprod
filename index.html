@@ -1231,7 +1231,7 @@ function miDashboardHTML(grp, d){
         <div class="panel" onclick="togglePanel(this)"><h3><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21.2 15.9A10 10 0 1 1 8 2.8"/><path d="M22 12A10 10 0 0 0 12 2v10z"/></svg>Destinação das peças${rotuloPeriodo}${EXPAND_IC}</h3>${donutHTML(nRecP,nSucP,nEnvP)}</div>
       </div>
       <div class="mi-panels-2">
-        <div class="panel" onclick="togglePanel(this)"><h3><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 3v18h18"/><rect x="7" y="10" width="3" height="8"/><rect x="12" y="6" width="3" height="12"/><rect x="17" y="13" width="3" height="5"/></svg>Peças recuperadas vs sucateadas (R$)${EXPAND_IC}</h3>${barsMesHTML(d.serieMensal)}</div>
+        <div class="panel" onclick="togglePanel(this)"><h3><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 3v18h18"/><rect x="7" y="10" width="3" height="8"/><rect x="12" y="6" width="3" height="12"/><rect x="17" y="13" width="3" height="5"/></svg>Peças recuperadas vs sucateadas (R$)${rotuloPeriodo}${EXPAND_IC}</h3>${barsMesHTML(d.serieMensal.filter(item=>idxsPeriodo.some(i=>item.label===MESES_ORDEM[i]+'/26')))}</div>
         <div class="panel" onclick="togglePanel(this)"><h3><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 21H4a1 1 0 0 1-1-1V3"/><path d="m5 15 4-4 3 3 5-6"/></svg>Peças avaliadas por categoria${rotuloPeriodo}${EXPAND_IC}</h3>${funnelHTML(totalPecasP,nRecP,nSucP,nEnvP)}</div>
       </div>
       ${footNote}
@@ -1523,21 +1523,32 @@ function insightProducaoHTML(d, kpi){
 function producaoDashboardHTML(kpi, d){
   const idxsDisponiveis = kpi.meses.map((v,i)=>v!=null?i:null).filter(i=>i!=null);
   const filtroHTML = filtroPeriodoAreaHTML(idxsDisponiveis, filtroProducaoDe, filtroProducaoAte, 'setFiltroProducaoDe', 'setFiltroProducaoAte');
+
+  const periodoAtivo = filtroProducaoDe!=null;
+  const de = filtroProducaoDe, ate = filtroProducaoAte!=null?filtroProducaoAte:filtroProducaoDe;
+  const idxsPeriodo = periodoAtivo ? idxsDisponiveis.filter(i=>i>=de && i<=ate) : idxsDisponiveis;
+
+  // gráfico de barras/aderência mensal respeita o filtro — fora do período vira null (some do gráfico).
+  // O "Previsto vs Realizado" continua ano inteiro, pois é acumulado — não dá pra "recortar" um acumulado.
+  const producaoMensalChart = periodoAtivo ? d.producaoMensal.map((v,i)=>idxsPeriodo.includes(i)?v:null) : d.producaoMensal;
+  const mesesChart = periodoAtivo ? kpi.meses.map((v,i)=>idxsPeriodo.includes(i)?v:null) : kpi.meses;
   const charts = `
     <div class="panel" onclick="togglePanel(this)">
       <h3><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 3v18h18"/><rect x="7" y="10" width="3" height="8"/><rect x="12" y="6" width="3" height="12"/><rect x="17" y="13" width="3" height="5"/></svg>Equipamentos produzidos vs. Aderência à Programação${EXPAND_IC}</h3>
-      ${producaoStepSVG(d.producaoMensal, kpi.meses, kpi)}
+      ${producaoStepSVG(producaoMensalChart, mesesChart, kpi)}
     </div>
     <div class="panel" onclick="togglePanel(this)" style="margin-top:14px">
-      <h3><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 3v18h18"/><path d="m19 9-5 5-4-4-3 3"/></svg>Previsto vs Realizado${EXPAND_IC}</h3>
+      <h3><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 3v18h18"/><path d="m19 9-5 5-4-4-3 3"/></svg>Previsto vs Realizado (ano inteiro)${EXPAND_IC}</h3>
       ${previstoRealizadoAcumSVG(d.previstoAcumMensalCompleto, d.realizadoAcumMensal, kpi, d.hojePos)}
+    </div>
+    <div class="panel" onclick="togglePanel(this)" style="margin-top:14px">
+      <h3><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><path d="M12 9v4M12 17h.01"/></svg>Projetos atrasados (Real. &lt; Prev.)${EXPAND_IC}</h3>
+      ${rankingProjetosHTML((d.rankingProjetos||[]).filter(p=>p.pct<100), kpi)}
     </div>
     <div class="foot-note">Dados calculados ao vivo a partir da planilha oficial de Aderência à Programação (FM.PRD.001), semana a semana. <a href="${(kpi.links&&kpi.links[0]&&kpi.links[0].url)||'#'}" target="_blank" style="color:var(--accent)">Abrir Cronograma completo ↗</a></div>
   `;
 
-  if(filtroProducaoDe!=null){
-    const de = filtroProducaoDe, ate = filtroProducaoAte!=null?filtroProducaoAte:filtroProducaoDe;
-    const idxsPeriodo = idxsDisponiveis.filter(i=>i>=de && i<=ate);
+  if(periodoAtivo){
     const somar = arr => idxsPeriodo.reduce((s,i)=> arr[i]!=null ? s+arr[i] : s, 0);
     const produzido = idxsPeriodo.length ? somar(d.producaoMensal) : null;
     const previsto = idxsPeriodo.length ? somar(d.previstoMensal) : null;
@@ -1545,6 +1556,10 @@ function producaoDashboardHTML(kpi, d){
     const gapPeriodo = (produzido!=null && previsto!=null) ? produzido-previsto : null;
     const nPeriodo = aderencia!=null ? nivel(aderencia,kpi) : null;
     const rotuloPeriodo = de===ate ? '' : ' no período';
+    // último mês disponível ainda está em andamento (nem todas as semanas fecharam) — o Previsto
+    // dele só soma as semanas já fechadas, senão o Gap comparado ficaria injusto (mês completo vs.
+    // produção parcial). Avisa quando isso afeta o período selecionado, pra não parecer bug.
+    const mesEmAndamento = ate === idxsDisponiveis[idxsDisponiveis.length-1];
     const kpiCardsMes = [
       { lbl:'Eq. Produzidos'+rotuloPeriodo, val: produzido!=null?Math.round(produzido).toLocaleString('pt-BR'):'–', cor:'var(--accent)',
         icon:'<path d="M21 8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16Z"/><path d="m3.3 7 8.7 5 8.7-5"/><path d="M12 22V12"/>' },
@@ -1564,6 +1579,9 @@ function producaoDashboardHTML(kpi, d){
             <div class="val">${c.val}${c.badge?` <span class="tier-badge" style="background:${corNivel(c.badge)}">${c.badge.toUpperCase()}</span>`:''}</div>
           </div>`).join("")}
       </div>
+      ${mesEmAndamento?`<div class="empty-state" style="border:1px dashed var(--n2);color:var(--ink);margin-bottom:14px;text-align:left;padding:12px 16px">
+        <b style="color:var(--n2)">${MESES_ORDEM[ate]}/26 ainda está em andamento</b> — o Previsto mostrado é só das semanas já fechadas (até S${d.cutoff}), não o mês inteiro. Por isso o Gap compara produção parcial com previsto parcial, de forma justa.
+      </div>`:''}
       ${charts}
     `;
   }
