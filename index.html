@@ -510,6 +510,15 @@ function metaN4Texto(kpi){
 function metaN4Valor(kpi){
   return kpi.sentido==="maior" ? kpi.faixas[2] : kpi.faixas[0];
 }
+// texto pra tooltip (title) explicando a faixa de cada nível N1-N4 desse indicador específico
+function faixasTooltipTexto(kpi){
+  const [a,b,c] = kpi.faixas;
+  const u = kpi.unidade;
+  if(kpi.sentido==="maior"){
+    return `N1: < ${fmt(a,u)}\nN2: ${fmt(a,u)} a ${fmt(b,u)}\nN3: ${fmt(b,u)} a ${fmt(c,u)}\nN4: ≥ ${fmt(c,u)}`;
+  }
+  return `N1: > ${fmt(c,u)}\nN2: ${fmt(b,u)} a ${fmt(c,u)}\nN3: ${fmt(a,u)} a ${fmt(b,u)}\nN4: < ${fmt(a,u)}`;
+}
 function atingimento(valor, kpi){
   if(valor==null) return null;
   const meta = metaN4Valor(kpi);
@@ -522,6 +531,56 @@ let filtroMes = null;
 function setFiltroMes(v){
   filtroMes = v==='' ? null : parseInt(v,10);
   render();
+}
+
+// ── FILTRO DE PERÍODO por área (Produção / Manutenção Interna): intervalo de/até — null/null = ano
+// todo, ou dois índices de mês (0-11) formando um intervalo de 1 ou vários meses seguidos ──
+let filtroProducaoDe = null, filtroProducaoAte = null;
+function setFiltroProducaoDe(v){
+  filtroProducaoDe = v==='' ? null : parseInt(v,10);
+  if(filtroProducaoDe!=null && (filtroProducaoAte==null || filtroProducaoAte<filtroProducaoDe)) filtroProducaoAte = filtroProducaoDe;
+  if(filtroProducaoDe==null) filtroProducaoAte = null;
+  if(dadosProducao){
+    const el = document.getElementById('producao-dash');
+    if(el) el.innerHTML = producaoDashboardHTML(METAS[0].kpis[0], dadosProducao);
+  }
+}
+function setFiltroProducaoAte(v){
+  filtroProducaoAte = v==='' ? null : parseInt(v,10);
+  if(dadosProducao){
+    const el = document.getElementById('producao-dash');
+    if(el) el.innerHTML = producaoDashboardHTML(METAS[0].kpis[0], dadosProducao);
+  }
+}
+let filtroMIDe = null, filtroMIAte = null;
+function setFiltroMIDe(v){
+  filtroMIDe = v==='' ? null : parseInt(v,10);
+  if(filtroMIDe!=null && (filtroMIAte==null || filtroMIAte<filtroMIDe)) filtroMIAte = filtroMIDe;
+  if(filtroMIDe==null) filtroMIAte = null;
+  if(dadosMI){
+    const el = document.getElementById('mi-dash');
+    if(el) el.innerHTML = miDashboardHTML(METAS[1], dadosMI);
+  }
+}
+function setFiltroMIAte(v){
+  filtroMIAte = v==='' ? null : parseInt(v,10);
+  if(dadosMI){
+    const el = document.getElementById('mi-dash');
+    if(el) el.innerHTML = miDashboardHTML(METAS[1], dadosMI);
+  }
+}
+// pill com dois selects (De/Até) — de===null é "ano todo"; de===até é 1 mês só; de<até é um intervalo
+function filtroPeriodoAreaHTML(idxsDisponiveis, de, ate, setDeFn, setAteFn){
+  const optsDe = idxsDisponiveis.map(i=>`<option value="${i}" ${de===i?'selected':''}>${MESES_ORDEM[i]}/26</option>`).join("");
+  const optsAte = idxsDisponiveis.filter(i=>de==null || i>=de).map(i=>`<option value="${i}" ${ate===i?'selected':''}>${MESES_ORDEM[i]}/26</option>`).join("");
+  return `<div class="pill filtro-mes" style="margin-bottom:14px;gap:10px">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 3H2l8 9.46V19l4 2v-8.54L22 3z"/></svg>
+    <select onchange="${setDeFn}(this.value)">
+      <option value="" ${de===null?'selected':''}>Ano todo</option>
+      ${optsDe}
+    </select>
+    ${de!=null?`<span style="color:var(--ink-faint)">até</span><select onchange="${setAteFn}(this.value)">${optsAte}</select>`:''}
+  </div>`;
 }
 function valorEfetivo(kpi){
   return filtroMes!=null ? kpi.meses[filtroMes] : kpi.atual;
@@ -684,7 +743,11 @@ function getDadosMI(){
 async function calcularDadosMI(){
   const res = await fetch(MI_WEBAPP_URL+'?t='+Date.now());
   if(!res.ok) throw new Error('HTTP '+res.status);
-  return await res.json();
+  const d = await res.json();
+  // quantidade de peças nunca é fracionada — R$ pode ter centavos, contagem não
+  d.nRec = Math.round(d.nRec); d.nSuc = Math.round(d.nSuc); d.nEnv = Math.round(d.nEnv);
+  d.totalPecas = d.nRec + d.nSuc + d.nEnv;
+  return d;
 }
 
 /* =====================================================================
@@ -959,7 +1022,7 @@ function viewGeral(){
     <div class="tablewrap">
       <div class="scroll">
         <table>
-          <thead><tr><th class="name">Indicador</th><th>Previsto</th><th>Realizado</th><th>Desempenho</th><th>Nível</th>${monthHeadCells()}</tr></thead>
+          <thead><tr><th class="name">Indicador</th><th>Previsto N4</th><th>Realizado</th><th>Desempenho</th><th>Nível</th>${monthHeadCells()}</tr></thead>
           <tbody>${rows}</tbody>
         </table>
       </div>
@@ -1123,6 +1186,58 @@ function sparklineSVG(kpi, opts){
 }
 function miDashboardHTML(grp, d){
   const kpiEstoque = grp.kpis[0];
+  const idxsDisponiveis = (d.mesesDetalhe||[]).map((v,i)=>v!=null?i:null).filter(i=>i!=null);
+  const filtroHTML = filtroPeriodoAreaHTML(idxsDisponiveis, filtroMIDe, filtroMIAte, 'setFiltroMIDe', 'setFiltroMIAte');
+  const footNote = `<div class="foot-note">Dados calculados ao vivo a partir das abas mensais da planilha "Custos - Manutenção Interna 2026" (peça a peça + saldo do armazém). <a href="${MI_SHEET_URL}" target="_blank" style="color:var(--accent)">Abrir planilha completa ↗</a></div>`;
+
+  if(filtroMIDe!=null && d.mesesDetalhe){
+    const de = filtroMIDe, ate = filtroMIAte!=null?filtroMIAte:filtroMIDe;
+    const idxsPeriodo = idxsDisponiveis.filter(i=>i>=de && i<=ate);
+    let nRecP=0, nSucP=0, nEnvP=0, recP=0, sucP=0;
+    idxsPeriodo.forEach(i=>{
+      const m = d.mesesDetalhe[i];
+      nRecP+=m.nRec; nSucP+=m.nSuc; nEnvP+=m.nEnv; recP+=m.rec; sucP+=m.suc;
+    });
+    nRecP=Math.round(nRecP); nSucP=Math.round(nSucP); nEnvP=Math.round(nEnvP);
+    const totalPecasP = nRecP+nSucP+nEnvP;
+    const indiceRecP = (recP+sucP)>0 ? recP/(recP+sucP)*100 : null;
+    const corRecupP = indiceRecP!=null && indiceRecP>=75 ? 'var(--n4)' : indiceRecP>=60 ? 'var(--n2)' : 'var(--n1)';
+    const estoqueNoFim = d.estoque.meses[ate]; // saldo do armazém no último mês do intervalo (não é soma)
+    const nEstoque = estoqueNoFim!=null ? nivel(estoqueNoFim,kpiEstoque) : null;
+    const rotuloPeriodo = de===ate ? '' : ' no período';
+    const kpiCardsMes = [
+      { lbl:'Peças avaliadas'+rotuloPeriodo, val: totalPecasP.toLocaleString('pt-BR'), cor:'var(--accent)',
+        icon:'<path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/>' },
+      { lbl:'Índice de Recuperação (R$)', val: indiceRecP!=null?indiceRecP.toFixed(0)+'%':'–', cor:corRecupP,
+        icon:'<path d="M3 3v18h18"/><path d="m19 9-5 5-4-4-3 3"/>' },
+      { lbl:'Valor Recuperado'+rotuloPeriodo, val: fmtGrande(recP), cor:'var(--n4)',
+        icon:'<path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/>' },
+      { lbl:'Valor Sucateado'+rotuloPeriodo, val: fmtGrande(sucP), cor:'var(--n1)',
+        icon:'<path d="M3 6h18M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2m3 0-1 14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2L4 6"/>' },
+      { lbl:'Saldo Armazém MI (fim do período)', val: fmt(estoqueNoFim,'R$'), badge: nEstoque, cor: nEstoque?corNivel(nEstoque):'var(--accent)',
+        icon:'<path d="M21 8V5a1 1 0 0 0-.5-.87l-7.5-4.3a2 2 0 0 0-2 0L3.5 4.13A1 1 0 0 0 3 5v14a1 1 0 0 0 .5.87l7.5 4.3a2 2 0 0 0 2 0"/><path d="M3.3 7 12 12l8.7-5M12 22V12"/>' },
+    ];
+    return `
+      ${filtroHTML}
+      <div class="mi-kpis">
+        ${kpiCardsMes.map(c=>`
+          <div class="mi-kpi" style="--bar:${c.cor}">
+            <div class="lbl"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${c.icon}</svg>${c.lbl}</div>
+            <div class="val">${c.val}${c.badge?` <span class="tier-badge" style="background:${corNivel(c.badge)}">${c.badge.toUpperCase()}</span>`:''}</div>
+          </div>`).join("")}
+      </div>
+      <div class="mi-panels">
+        <div class="panel" onclick="togglePanel(this)"><h3><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 3v18h18"/><path d="m19 9-5 5-4-4-3 3"/></svg>Saldo Armazém MI (R$)${EXPAND_IC}</h3>${sparklineSVG(kpiEstoque)}</div>
+        <div class="panel" onclick="togglePanel(this)"><h3><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21.2 15.9A10 10 0 1 1 8 2.8"/><path d="M22 12A10 10 0 0 0 12 2v10z"/></svg>Destinação das peças${rotuloPeriodo}${EXPAND_IC}</h3>${donutHTML(nRecP,nSucP,nEnvP)}</div>
+      </div>
+      <div class="mi-panels-2">
+        <div class="panel" onclick="togglePanel(this)"><h3><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 3v18h18"/><rect x="7" y="10" width="3" height="8"/><rect x="12" y="6" width="3" height="12"/><rect x="17" y="13" width="3" height="5"/></svg>Peças recuperadas vs sucateadas (R$)${EXPAND_IC}</h3>${barsMesHTML(d.serieMensal)}</div>
+        <div class="panel" onclick="togglePanel(this)"><h3><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 21H4a1 1 0 0 1-1-1V3"/><path d="m5 15 4-4 3 3 5-6"/></svg>Peças avaliadas por categoria${rotuloPeriodo}${EXPAND_IC}</h3>${funnelHTML(totalPecasP,nRecP,nSucP,nEnvP)}</div>
+      </div>
+      ${footNote}
+    `;
+  }
+
   const n = nivel(kpiEstoque.recente, kpiEstoque);
   const corRecup = d.indiceRecuperacao!=null && d.indiceRecuperacao>=75 ? 'var(--n4)' : d.indiceRecuperacao>=60 ? 'var(--n2)' : 'var(--n1)';
   const kpiCards = [
@@ -1138,6 +1253,7 @@ function miDashboardHTML(grp, d){
       icon:'<path d="M21 8V5a1 1 0 0 0-.5-.87l-7.5-4.3a2 2 0 0 0-2 0L3.5 4.13A1 1 0 0 0 3 5v14a1 1 0 0 0 .5.87l7.5 4.3a2 2 0 0 0 2 0"/><path d="M3.3 7 12 12l8.7-5M12 22V12"/>' },
   ];
   return `
+    ${filtroHTML}
     <div class="mi-kpis">
       ${kpiCards.map(c=>`
         <div class="mi-kpi" style="--bar:${c.cor}">
@@ -1153,7 +1269,7 @@ function miDashboardHTML(grp, d){
       <div class="panel" onclick="togglePanel(this)"><h3><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 3v18h18"/><rect x="7" y="10" width="3" height="8"/><rect x="12" y="6" width="3" height="12"/><rect x="17" y="13" width="3" height="5"/></svg>Peças recuperadas vs sucateadas (R$)${EXPAND_IC}</h3>${barsMesHTML(d.serieMensal)}</div>
       <div class="panel" onclick="togglePanel(this)"><h3><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 21H4a1 1 0 0 1-1-1V3"/><path d="m5 15 4-4 3 3 5-6"/></svg>Peças avaliadas por categoria${EXPAND_IC}</h3>${funnelHTML(d.totalPecas,d.nRec,d.nSuc,d.nEnv)}</div>
     </div>
-    <div class="foot-note">Dados calculados ao vivo a partir das abas mensais da planilha "Custos - Manutenção Interna 2026" (peça a peça + saldo do armazém). <a href="${MI_SHEET_URL}" target="_blank" style="color:var(--accent)">Abrir planilha completa ↗</a></div>
+    ${footNote}
   `;
 }
 function viewManutencaoInterna(grp){
@@ -1405,6 +1521,53 @@ function insightProducaoHTML(d, kpi){
   </div>`;
 }
 function producaoDashboardHTML(kpi, d){
+  const idxsDisponiveis = kpi.meses.map((v,i)=>v!=null?i:null).filter(i=>i!=null);
+  const filtroHTML = filtroPeriodoAreaHTML(idxsDisponiveis, filtroProducaoDe, filtroProducaoAte, 'setFiltroProducaoDe', 'setFiltroProducaoAte');
+  const charts = `
+    <div class="panel" onclick="togglePanel(this)">
+      <h3><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 3v18h18"/><rect x="7" y="10" width="3" height="8"/><rect x="12" y="6" width="3" height="12"/><rect x="17" y="13" width="3" height="5"/></svg>Equipamentos produzidos vs. Aderência à Programação${EXPAND_IC}</h3>
+      ${producaoStepSVG(d.producaoMensal, kpi.meses, kpi)}
+    </div>
+    <div class="panel" onclick="togglePanel(this)" style="margin-top:14px">
+      <h3><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 3v18h18"/><path d="m19 9-5 5-4-4-3 3"/></svg>Previsto vs Realizado${EXPAND_IC}</h3>
+      ${previstoRealizadoAcumSVG(d.previstoAcumMensalCompleto, d.realizadoAcumMensal, kpi, d.hojePos)}
+    </div>
+    <div class="foot-note">Dados calculados ao vivo a partir da planilha oficial de Aderência à Programação (FM.PRD.001), semana a semana. <a href="${(kpi.links&&kpi.links[0]&&kpi.links[0].url)||'#'}" target="_blank" style="color:var(--accent)">Abrir Cronograma completo ↗</a></div>
+  `;
+
+  if(filtroProducaoDe!=null){
+    const de = filtroProducaoDe, ate = filtroProducaoAte!=null?filtroProducaoAte:filtroProducaoDe;
+    const idxsPeriodo = idxsDisponiveis.filter(i=>i>=de && i<=ate);
+    const somar = arr => idxsPeriodo.reduce((s,i)=> arr[i]!=null ? s+arr[i] : s, 0);
+    const produzido = idxsPeriodo.length ? somar(d.producaoMensal) : null;
+    const previsto = idxsPeriodo.length ? somar(d.previstoMensal) : null;
+    const aderencia = mediaMeses(idxsPeriodo.map(i=>kpi.meses[i])); // média das aderências dos meses do intervalo
+    const gapPeriodo = (produzido!=null && previsto!=null) ? produzido-previsto : null;
+    const nPeriodo = aderencia!=null ? nivel(aderencia,kpi) : null;
+    const rotuloPeriodo = de===ate ? '' : ' no período';
+    const kpiCardsMes = [
+      { lbl:'Eq. Produzidos'+rotuloPeriodo, val: produzido!=null?Math.round(produzido).toLocaleString('pt-BR'):'–', cor:'var(--accent)',
+        icon:'<path d="M21 8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16Z"/><path d="m3.3 7 8.7 5 8.7-5"/><path d="M12 22V12"/>' },
+      { lbl:'Previsto'+rotuloPeriodo, val: previsto!=null?Math.round(previsto).toLocaleString('pt-BR'):'–', cor:'var(--ink-dim)',
+        icon:'<path d="M3 3v18h18"/><path d="M18 17V9M13 17V5M8 17v-4"/>' },
+      { lbl:'Gap'+rotuloPeriodo, val: gapPeriodo==null?'–':(gapPeriodo>=0?'+':'')+Math.round(gapPeriodo).toLocaleString('pt-BR')+' un.', cor: gapPeriodo==null?'var(--accent)':gapPeriodo>=0?'var(--n4)':'var(--n1)',
+        icon:'<path d="M3 3v18h18"/><path d="m19 9-5 5-4-4-3 3"/><path d="M15 9h4v4"/>' },
+      { lbl:'Aderência à Programação', val: fmt(aderencia,kpi.unidade), badge:nPeriodo, cor: nPeriodo?corNivel(nPeriodo):'var(--accent)',
+        icon:'<path d="M3 3v18h18"/><path d="m19 9-5 5-4-4-3 3"/>' },
+    ];
+    return `
+      ${filtroHTML}
+      <div class="mi-kpis">
+        ${kpiCardsMes.map(c=>`
+          <div class="mi-kpi" style="--bar:${c.cor}">
+            <div class="lbl"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${c.icon}</svg>${c.lbl}</div>
+            <div class="val">${c.val}${c.badge?` <span class="tier-badge" style="background:${corNivel(c.badge)}">${c.badge.toUpperCase()}</span>`:''}</div>
+          </div>`).join("")}
+      </div>
+      ${charts}
+    `;
+  }
+
   const n = nivel(kpi.recente, kpi);
   const mesesComDado = d.producaoMensal.filter(v=>v!=null);
   const mediaMensal = mesesComDado.length ? d.totalProduzido/mesesComDado.length : null;
@@ -1426,6 +1589,7 @@ function producaoDashboardHTML(kpi, d){
   ];
 
   return `
+    ${filtroHTML}
     <div class="mi-kpis">
       ${kpiCards.map(c=>`
         <div class="mi-kpi" style="--bar:${c.cor}">
@@ -1434,15 +1598,7 @@ function producaoDashboardHTML(kpi, d){
         </div>`).join("")}
     </div>
     ${insightProducaoHTML(d, kpi)}
-    <div class="panel" onclick="togglePanel(this)">
-      <h3><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 3v18h18"/><rect x="7" y="10" width="3" height="8"/><rect x="12" y="6" width="3" height="12"/><rect x="17" y="13" width="3" height="5"/></svg>Equipamentos produzidos vs. Aderência à Programação${EXPAND_IC}</h3>
-      ${producaoStepSVG(d.producaoMensal, kpi.meses, kpi)}
-    </div>
-    <div class="panel" onclick="togglePanel(this)" style="margin-top:14px">
-      <h3><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 3v18h18"/><path d="m19 9-5 5-4-4-3 3"/></svg>Previsto vs Realizado${EXPAND_IC}</h3>
-      ${previstoRealizadoAcumSVG(d.previstoAcumMensalCompleto, d.realizadoAcumMensal, kpi, d.hojePos)}
-    </div>
-    <div class="foot-note">Dados calculados ao vivo a partir da planilha oficial de Aderência à Programação (FM.PRD.001), semana a semana. <a href="${(kpi.links&&kpi.links[0]&&kpi.links[0].url)||'#'}" target="_blank" style="color:var(--accent)">Abrir Cronograma completo ↗</a></div>
+    ${charts}
   `;
 }
 
@@ -2391,8 +2547,9 @@ function renderCards(areas){
         ? `<span style="font-size:13px;color:var(--ink-faint);font-weight:500"><span class="card-spinner"></span>Carregando…</span>`
         : `<span style="font-size:14px;color:var(--ink-faint);font-weight:500">Pendente</span>`;
     const subHTML = a.nivel ? a.kpiRef.nome : (carregando ? 'buscando dado na planilha…' : 'nenhum indicador conectado ainda');
+    const tooltip = a.kpiRef ? `Faixas de nível — ${a.kpiRef.nome}:\n${faixasTooltipTexto(a.kpiRef)}` : '';
     return `
-    <div class="card" style="--bar:${a.cor}">
+    <div class="card" style="--bar:${a.cor}" title="${tooltip.replace(/"/g,'&quot;')}">
       <div class="lbl">${areaIcon(a.area,true)}${a.area}</div>
       <div class="val">${valHTML}</div>
       <div class="sub">${subHTML}</div>
