@@ -852,56 +852,53 @@ async function fetchGvizJSON(sheetId, nomeAba){
   return JSON.parse(text.slice(text.indexOf('{'), text.lastIndexOf('}')+1));
 }
 
-const MES_NOME_IDX_FILIAIS = {janeiro:0,fevereiro:1,'março':2,abril:3,maio:4,junho:5,julho:6,agosto:7,setembro:8,outubro:9,novembro:10,dezembro:11};
-function parseMesAnoFiliais(s){
-  const partes = String(s).toLowerCase().split('/');
-  const idx = MES_NOME_IDX_FILIAIS[(partes[0]||'').trim()];
-  if(idx==null) return null;
-  const anoStr = (partes[1]||'').trim();
-  const ano = anoStr ? (anoStr.length===2 ? 2000+parseInt(anoStr,10) : parseInt(anoStr,10)) : 0;
-  return { idx, chave: ano*12+idx };
-}
 
 async function calcularDadosFiliais(){
-  const [resumoJson, mensalJson] = await Promise.all([
+  const [resumoJson, historicoJson] = await Promise.all([
     fetchGvizJSON(FILIAIS_SHEET_ID, 'Resumo por Base'),
-    fetchGvizJSON(FILIAIS_SHEET_ID, 'Resumo Mensal'),
+    fetchGvizJSON(FILIAIS_SHEET_ID, 'Histórico'),
   ]);
   const numv = c => (c && typeof c.v === 'number') ? c.v : null;
   const strv = c => (c && c.v != null) ? String(c.v) : null;
 
   // "Resumo por Base": Base, % Atendimento, Ruptura %, Nível, SKUs na Meta, SKUs Total, Pendência Total.
   // É o estado ATUAL por base (atualizado ao vivo conforme pendências são resolvidas) — alimenta o
-  // mapa, o ranking e a tabela por base (o "como está agora"). A aba "Resumo Mensal" é a MÉDIA fechada
-  // do mês (calculada pelo script do usuário) — usada só para os cards de rede e o histórico mensal
-  // (Matriz de Metas), que precisam de um número estável mês a mês, não um valor que muda a cada minuto.
+  // mapa, o ranking e a tabela por base (o "como está agora"). Ignora linha cujo nome não bata com
+  // nenhuma das 9 bases conhecidas (BASE_UF) — evita que duplicata/erro de digitação contamine a soma.
   // O "Excesso" (aba "Excesso de Estoque") foi removido: comparava quantidade de itens por código contra
   // contagem de SKUs de outra aba — unidades diferentes, dava percentuais sem sentido (ex.: 360% numa base).
   const bases = [];
   (resumoJson.table.rows||[]).forEach(row=>{
     if(!row.c) return;
     const nome = strv(row.c[0]);
-    if(!nome) return;
+    if(!nome || !BASE_UF[nome]) return;
     const ns = numv(row.c[1]), rup = numv(row.c[2]);
     bases.push({ base: nome, uf: BASE_UF[nome]||null,
       ns: ns!=null ? ns*100 : null, rupturaBase: rup!=null ? rup*100 : null,
       skusMeta: numv(row.c[4])||0, objetivo: numv(row.c[5])||0, pend: numv(row.c[6])||0 });
   });
 
-  // "Resumo Mensal": Mês, Base, % Atendimento (média), Ruptura % (média), Nível, Semanas
-  const porMes = {}; // chave (ano*12+mês) -> { idx, porBase:{nome:{atendimento,ruptura}} }
-  (mensalJson.table.rows||[]).forEach(row=>{
+  // "Histórico": Data, Semana, Mês (AAAA-MM), Base, % Atendimento, % Ruptura, SKUs na Meta,
+  // SKUs Total, Zerados — uma linha por base por semana. O indicador de REDE não é a média das
+  // % de cada base (isso trataria uma base de 20 SKUs igual a uma de 90) — é ponderado: soma de
+  // SKUs na Meta / soma de SKUs Total de TODAS as bases e semanas do mês (idem Zerados p/ Ruptura).
+  // Validado batendo exato com os números oficiais do usuário: julho 87,5%/6,8%, agosto 92,3%/3,8%.
+  const porMes = {}; // chave (ano*12+mês) -> { idx, skusMeta, skusTotal, zerados }
+  (historicoJson.table.rows||[]).forEach(row=>{
     if(!row.c) return;
-    const mesStr = strv(row.c[0]), nome = strv(row.c[1]);
-    if(!mesStr || !nome) return;
-    const m = parseMesAnoFiliais(mesStr);
-    if(!m) return;
-    if(!porMes[m.chave]) porMes[m.chave] = { idx: m.idx, porBase:{} };
-    porMes[m.chave].porBase[nome] = { atendimento: numv(row.c[2]), ruptura: numv(row.c[3]) };
+    const mesStr = strv(row.c[2]), nome = strv(row.c[3]);
+    if(!mesStr || !nome || !BASE_UF[nome]) return;
+    const [anoStr,mesStrNum] = mesStr.split('-');
+    const ano = parseInt(anoStr,10), mesNum = parseInt(mesStrNum,10);
+    if(!ano || !mesNum) return;
+    const idx = mesNum-1, chave = ano*12+idx;
+    if(!porMes[chave]) porMes[chave] = { idx, skusMeta:0, skusTotal:0, zerados:0 };
+    porMes[chave].skusMeta += numv(row.c[6])||0;
+    porMes[chave].skusTotal += numv(row.c[7])||0;
+    porMes[chave].zerados += numv(row.c[8])||0;
   });
   const chaves = Object.keys(porMes).map(Number).sort((a,b)=>a-b);
   const chaveAtual = chaves.length ? chaves[chaves.length-1] : null;
-  const mesAtualDados = chaveAtual!=null ? porMes[chaveAtual] : null;
 
   let totSkusMeta=0, totSkusTotal=0;
   bases.forEach(b=>{
@@ -909,21 +906,20 @@ async function calcularDadosFiliais(){
     totSkusMeta += b.skusMeta; totSkusTotal += b.objetivo;
   });
 
-  // série histórica real da rede (média simples entre bases, por mês) — alimenta o KPI oficial mês a mês
+  // série histórica real da rede (ponderada por SKUs, por mês) — alimenta o KPI oficial mês a mês
   const acuraciaMensal = Array(12).fill(null), rupturaMensal = Array(12).fill(null);
   chaves.forEach(ch=>{
-    const vals = Object.values(porMes[ch].porBase);
-    const atd = vals.map(v=>v.atendimento).filter(v=>v!=null);
-    const rup = vals.map(v=>v.ruptura).filter(v=>v!=null);
-    const idx = porMes[ch].idx;
-    if(atd.length) acuraciaMensal[idx] = atd.reduce((a,b)=>a+b,0)/atd.length*100;
-    if(rup.length) rupturaMensal[idx] = rup.reduce((a,b)=>a+b,0)/rup.length*100;
+    const m = porMes[ch];
+    if(m.skusTotal>0){
+      acuraciaMensal[m.idx] = m.skusMeta/m.skusTotal*100;
+      rupturaMensal[m.idx] = m.zerados/m.skusTotal*100;
+    }
   });
 
   return {
     bases,
-    acuracidade: mesAtualDados!=null ? acuraciaMensal[mesAtualDados.idx] : null,
-    ruptura: mesAtualDados!=null ? rupturaMensal[mesAtualDados.idx] : null,
+    acuracidade: chaveAtual!=null ? acuraciaMensal[porMes[chaveAtual].idx] : null,
+    ruptura: chaveAtual!=null ? rupturaMensal[porMes[chaveAtual].idx] : null,
     acuraciaEstoque: totSkusTotal>0 ? totSkusMeta/totSkusTotal*100 : null, // SKUs na Meta / SKUs Total (rede), semana atual
     acuraciaMensal, rupturaMensal,
   };
@@ -1399,15 +1395,14 @@ function quemEstaAtrasadoHTML(ranking){
     .filter(p=>p.gap<0)
     .sort((a,b)=>a.gap-b.gap);
   if(!atrasados.length) return '<div class="empty-state">Nenhum projeto atrasado no momento.</div>';
-  const maxAbsGap = Math.max(...atrasados.map(p=>Math.abs(p.gap)), 1);
-  return `<div class="funnel">${atrasados.slice(0,8).map(p=>{
-    const w = Math.min(100, Math.abs(p.gap)/maxAbsGap*100);
-    return `<div class="row">
-      <div class="flabel" title="${p.nome}">${p.nome}</div>
-      <div class="ftrack"><div class="ffill" style="width:${w}%;background:var(--ink-faint)"></div></div>
-      <div class="fval" style="color:var(--n1)">${p.gap} un.</div>
-    </div>`;
-  }).join("")}</div>`;
+  // igual ao Cronograma: barrinha curta e fixa (não proporcional ao valor), só um adorno visual
+  // antes do número — não uma barra de progresso que cresce com a magnitude do atraso.
+  return `<div style="display:flex;flex-direction:column;gap:4px">${atrasados.slice(0,8).map(p=>`
+    <div style="display:flex;align-items:center;gap:14px;padding:9px 4px">
+      <div style="flex:1;font-size:12px;color:var(--ink-dim);text-transform:uppercase;letter-spacing:.02em" title="${p.nome}">${p.nome}</div>
+      <div style="width:90px;height:5px;border-radius:3px;background:var(--line-soft)"><div style="width:70%;height:100%;border-radius:3px;background:var(--ink-faint)"></div></div>
+      <div style="width:60px;text-align:right;font-size:12.5px;font-weight:700;color:var(--n1)">${p.gap} un.</div>
+    </div>`).join("")}</div>`;
 }
 function semaforoProjetosHTML(ranking, kpi){
   if(!ranking || !ranking.length) return '<div class="empty-state">Sem projetos com previsto no período.</div>';
@@ -1429,7 +1424,7 @@ function semaforoProjetosHTML(ranking, kpi){
     <div class="foot-note" style="margin-top:10px;margin-bottom:0;font-size:10px">${total} projetos com previsto no período, classificados pela mesma faixa da Aderência à Programação.</div>
   `;
 }
-function previstoRealizadoAcumSVG(prevArr, realArr, kpi, hojePos, resumoAtrasados){
+function previstoRealizadoAcumSVG(prevArr, realArr, kpi, hojePos){
   const idxs = [];
   for(let i=0;i<12;i++){ if(prevArr[i]!=null) idxs.push(i); } // previsto (plano) cobre o ano inteiro, até dezembro
   if(!idxs.length) return '<div class="empty-state">Ainda sem histórico mensal de produção.</div>';
@@ -1490,31 +1485,10 @@ function previstoRealizadoAcumSVG(prevArr, realArr, kpi, hojePos, resumoAtrasado
       <text x="${hx.toFixed(1)}" y="${P.t-10}" text-anchor="middle" fill="var(--n2)" font-size="10.5" font-weight="700">hoje</text>`;
   }
 
-  // "storytelling" — um resuminho apontando pra dentro da própria área de atraso, em vez de só
-  // uma legenda genérica "Área = atrasado". Só aparece se tiver projeto atrasado de verdade,
-  // e fica encostado na área vermelha (sem sobrepor pontos/rótulos existentes).
-  let storyAnnotation = '';
-  if(resumoAtrasados && resumoAtrasados.count>0 && realPts.length){
-    const last = realPts[realPts.length-1];
-    const pa = prevPts[last.pos];
-    if(pa){
-      const midY = (y(last.v)+y(pa.v))/2;
-      const ax = x(last.pos)-10;
-      const tx = Math.max(P.l+4, ax-70);
-      storyAnnotation = `
-        <line x1="${ax.toFixed(1)}" y1="${midY.toFixed(1)}" x2="${(tx+2).toFixed(1)}" y2="${(midY-15).toFixed(1)}" stroke="var(--n1)" stroke-width="1" opacity=".55"/>
-        <circle cx="${ax.toFixed(1)}" cy="${midY.toFixed(1)}" r="2.5" fill="var(--n1)"/>
-        <text x="${tx.toFixed(1)}" y="${(midY-18).toFixed(1)}" text-anchor="start" fill="var(--n1)" font-size="10" font-weight="700">${resumoAtrasados.count} projeto${resumoAtrasados.count>1?'s':''} atrasado${resumoAtrasados.count>1?'s':''}</text>
-        <text x="${tx.toFixed(1)}" y="${(midY-6).toFixed(1)}" text-anchor="start" fill="var(--n1)" font-size="9.5" opacity=".85">${resumoAtrasados.totalDeficit} un. no total</text>
-      `;
-    }
-  }
-
   return `<svg viewBox="0 0 ${w} ${h}" style="width:100%;height:auto;display:block">
     ${grid}
     ${areaSegs}
     ${hojeLine}
-    ${storyAnnotation}
     <path d="${prevPath}" fill="none" stroke="var(--ink-faint)" stroke-width="2" stroke-dasharray="5 4"/>
     ${prevDots}
     <path d="${realPath}" fill="none" stroke="var(--accent)" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round"/>
@@ -1571,8 +1545,6 @@ function producaoDashboardHTML(kpi, d){
   // O "Previsto vs Realizado" continua ano inteiro, pois é acumulado — não dá pra "recortar" um acumulado.
   const producaoMensalChart = periodoAtivo ? d.producaoMensal.map((v,i)=>idxsPeriodo.includes(i)?v:null) : d.producaoMensal;
   const mesesChart = periodoAtivo ? kpi.meses.map((v,i)=>idxsPeriodo.includes(i)?v:null) : kpi.meses;
-  const atrasadosPeriodo = (d.rankingProjetos||[]).map(p=>Math.round((p.real||0)-(p.previsto||0))).filter(g=>g<0);
-  const resumoAtrasados = { count: atrasadosPeriodo.length, totalDeficit: atrasadosPeriodo.reduce((s,g)=>s+g,0) };
   const charts = `
     <div class="panel" onclick="togglePanel(this)">
       <h3><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 3v18h18"/><rect x="7" y="10" width="3" height="8"/><rect x="12" y="6" width="3" height="12"/><rect x="17" y="13" width="3" height="5"/></svg>Equipamentos produzidos vs. Aderência à Programação${EXPAND_IC}</h3>
@@ -1580,7 +1552,7 @@ function producaoDashboardHTML(kpi, d){
     </div>
     <div class="panel" onclick="togglePanel(this)" style="margin-top:14px">
       <h3><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 3v18h18"/><path d="m19 9-5 5-4-4-3 3"/></svg>Previsto vs Realizado (ano inteiro)${EXPAND_IC}</h3>
-      ${previstoRealizadoAcumSVG(d.previstoAcumMensalCompleto, d.realizadoAcumMensal, kpi, d.hojePos, resumoAtrasados)}
+      ${previstoRealizadoAcumSVG(d.previstoAcumMensalCompleto, d.realizadoAcumMensal, kpi, d.hojePos)}
     </div>
     <div style="margin-top:22px">
       <div style="font-size:10px;letter-spacing:.14em;text-transform:uppercase;color:var(--ink-faint);margin-bottom:10px">Quem está atrasado</div>
@@ -2668,6 +2640,9 @@ async function init(){
     const kRupt = METAS[3].kpis[0];
     d.rupturaMensal.forEach((v,i)=>{ if(v!=null) kRupt.meses[i] = v; });
     kRupt.recente = d.ruptura;
+    // Realizado = média SIMPLES entre os meses já postados — cada mês (kRupt.meses) já vem
+    // ponderado por SKUs internamente (ver calcularDadosFiliais), então aqui é só a média normal
+    // entre eles, igual às outras 3 áreas (mediaMeses).
     kRupt.atual = mediaMeses(kRupt.meses);
   }).catch(e=>console.error('Erro ao buscar dados das Filiais:', e))
     .finally(()=>{ carregandoAreas.delete('Filiais'); render(); });
