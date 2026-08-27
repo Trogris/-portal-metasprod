@@ -1391,6 +1391,24 @@ function rankingProjetosHTML(ranking, kpi){
     </div>`;
   }).join("")}</div>`;
 }
+// "Quem está atrasado" — mesmo formato do Cronograma de Produção: déficit em unidades (Real. − Prev.),
+// não porcentagem, barra discreta só pra dar noção de escala relativa entre os projetos da lista.
+function quemEstaAtrasadoHTML(ranking){
+  const atrasados = (ranking||[])
+    .map(p=>({ nome:p.nome, gap: Math.round((p.real||0)-(p.previsto||0)) }))
+    .filter(p=>p.gap<0)
+    .sort((a,b)=>a.gap-b.gap);
+  if(!atrasados.length) return '<div class="empty-state">Nenhum projeto atrasado no momento.</div>';
+  const maxAbsGap = Math.max(...atrasados.map(p=>Math.abs(p.gap)), 1);
+  return `<div class="funnel">${atrasados.slice(0,8).map(p=>{
+    const w = Math.min(100, Math.abs(p.gap)/maxAbsGap*100);
+    return `<div class="row">
+      <div class="flabel" title="${p.nome}">${p.nome}</div>
+      <div class="ftrack"><div class="ffill" style="width:${w}%;background:var(--ink-faint)"></div></div>
+      <div class="fval" style="color:var(--n1)">${p.gap} un.</div>
+    </div>`;
+  }).join("")}</div>`;
+}
 function semaforoProjetosHTML(ranking, kpi){
   if(!ranking || !ranking.length) return '<div class="empty-state">Sem projetos com previsto no período.</div>';
   const counts = {n1:0,n2:0,n3:0,n4:0};
@@ -1411,7 +1429,7 @@ function semaforoProjetosHTML(ranking, kpi){
     <div class="foot-note" style="margin-top:10px;margin-bottom:0;font-size:10px">${total} projetos com previsto no período, classificados pela mesma faixa da Aderência à Programação.</div>
   `;
 }
-function previstoRealizadoAcumSVG(prevArr, realArr, kpi, hojePos){
+function previstoRealizadoAcumSVG(prevArr, realArr, kpi, hojePos, resumoAtrasados){
   const idxs = [];
   for(let i=0;i<12;i++){ if(prevArr[i]!=null) idxs.push(i); } // previsto (plano) cobre o ano inteiro, até dezembro
   if(!idxs.length) return '<div class="empty-state">Ainda sem histórico mensal de produção.</div>';
@@ -1472,10 +1490,31 @@ function previstoRealizadoAcumSVG(prevArr, realArr, kpi, hojePos){
       <text x="${hx.toFixed(1)}" y="${P.t-10}" text-anchor="middle" fill="var(--n2)" font-size="10.5" font-weight="700">hoje</text>`;
   }
 
+  // "storytelling" — um resuminho apontando pra dentro da própria área de atraso, em vez de só
+  // uma legenda genérica "Área = atrasado". Só aparece se tiver projeto atrasado de verdade,
+  // e fica encostado na área vermelha (sem sobrepor pontos/rótulos existentes).
+  let storyAnnotation = '';
+  if(resumoAtrasados && resumoAtrasados.count>0 && realPts.length){
+    const last = realPts[realPts.length-1];
+    const pa = prevPts[last.pos];
+    if(pa){
+      const midY = (y(last.v)+y(pa.v))/2;
+      const ax = x(last.pos)-10;
+      const tx = Math.max(P.l+4, ax-70);
+      storyAnnotation = `
+        <line x1="${ax.toFixed(1)}" y1="${midY.toFixed(1)}" x2="${(tx+2).toFixed(1)}" y2="${(midY-15).toFixed(1)}" stroke="var(--n1)" stroke-width="1" opacity=".55"/>
+        <circle cx="${ax.toFixed(1)}" cy="${midY.toFixed(1)}" r="2.5" fill="var(--n1)"/>
+        <text x="${tx.toFixed(1)}" y="${(midY-18).toFixed(1)}" text-anchor="start" fill="var(--n1)" font-size="10" font-weight="700">${resumoAtrasados.count} projeto${resumoAtrasados.count>1?'s':''} atrasado${resumoAtrasados.count>1?'s':''}</text>
+        <text x="${tx.toFixed(1)}" y="${(midY-6).toFixed(1)}" text-anchor="start" fill="var(--n1)" font-size="9.5" opacity=".85">${resumoAtrasados.totalDeficit} un. no total</text>
+      `;
+    }
+  }
+
   return `<svg viewBox="0 0 ${w} ${h}" style="width:100%;height:auto;display:block">
     ${grid}
     ${areaSegs}
     ${hojeLine}
+    ${storyAnnotation}
     <path d="${prevPath}" fill="none" stroke="var(--ink-faint)" stroke-width="2" stroke-dasharray="5 4"/>
     ${prevDots}
     <path d="${realPath}" fill="none" stroke="var(--accent)" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round"/>
@@ -1532,6 +1571,8 @@ function producaoDashboardHTML(kpi, d){
   // O "Previsto vs Realizado" continua ano inteiro, pois é acumulado — não dá pra "recortar" um acumulado.
   const producaoMensalChart = periodoAtivo ? d.producaoMensal.map((v,i)=>idxsPeriodo.includes(i)?v:null) : d.producaoMensal;
   const mesesChart = periodoAtivo ? kpi.meses.map((v,i)=>idxsPeriodo.includes(i)?v:null) : kpi.meses;
+  const atrasadosPeriodo = (d.rankingProjetos||[]).map(p=>Math.round((p.real||0)-(p.previsto||0))).filter(g=>g<0);
+  const resumoAtrasados = { count: atrasadosPeriodo.length, totalDeficit: atrasadosPeriodo.reduce((s,g)=>s+g,0) };
   const charts = `
     <div class="panel" onclick="togglePanel(this)">
       <h3><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 3v18h18"/><rect x="7" y="10" width="3" height="8"/><rect x="12" y="6" width="3" height="12"/><rect x="17" y="13" width="3" height="5"/></svg>Equipamentos produzidos vs. Aderência à Programação${EXPAND_IC}</h3>
@@ -1539,11 +1580,11 @@ function producaoDashboardHTML(kpi, d){
     </div>
     <div class="panel" onclick="togglePanel(this)" style="margin-top:14px">
       <h3><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 3v18h18"/><path d="m19 9-5 5-4-4-3 3"/></svg>Previsto vs Realizado (ano inteiro)${EXPAND_IC}</h3>
-      ${previstoRealizadoAcumSVG(d.previstoAcumMensalCompleto, d.realizadoAcumMensal, kpi, d.hojePos)}
+      ${previstoRealizadoAcumSVG(d.previstoAcumMensalCompleto, d.realizadoAcumMensal, kpi, d.hojePos, resumoAtrasados)}
     </div>
-    <div class="panel" onclick="togglePanel(this)" style="margin-top:14px">
-      <h3><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><path d="M12 9v4M12 17h.01"/></svg>Projetos atrasados (Real. &lt; Prev.)${EXPAND_IC}</h3>
-      ${rankingProjetosHTML((d.rankingProjetos||[]).filter(p=>p.pct<100), kpi)}
+    <div style="margin-top:22px">
+      <div style="font-size:10px;letter-spacing:.14em;text-transform:uppercase;color:var(--ink-faint);margin-bottom:10px">Quem está atrasado</div>
+      ${quemEstaAtrasadoHTML(d.rankingProjetos)}
     </div>
     <div class="foot-note">Dados calculados ao vivo a partir da planilha oficial de Aderência à Programação (FM.PRD.001), semana a semana. <a href="${(kpi.links&&kpi.links[0]&&kpi.links[0].url)||'#'}" target="_blank" style="color:var(--accent)">Abrir Cronograma completo ↗</a></div>
   `;
