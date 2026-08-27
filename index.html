@@ -1728,8 +1728,6 @@ function filiaisDashboardHTML(grp, d){
       icon:'<circle cx="12" cy="12" r="10"/><path d="M12 8v4M12 16h.01"/>' },
     { lbl:'Nível de Atendimento % (rede)', val: d.acuracidade!=null?d.acuracidade.toFixed(1)+'%':'–', cor:'var(--accent)',
       icon:'<path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/>' },
-    { lbl:'Acuracidade do Estoque', val: d.acuraciaEstoque!=null?d.acuraciaEstoque.toFixed(1)+'%':'–', cor:'var(--accent)',
-      icon:'<path d="M21 8V5a1 1 0 0 0-.5-.87l-7.5-4.3a2 2 0 0 0-2 0L3.5 4.13A1 1 0 0 0 3 5v14a1 1 0 0 0 .5.87l7.5 4.3a2 2 0 0 0 2 0"/><path d="M3.3 7 12 12l8.7-5M12 22V12"/>' },
     { lbl:'Bases dentro da meta', val:`${dentroMeta}/${d.bases.length}`, cor:'var(--n4)',
       icon:'<path d="M3 21V7l9-4 9 4v14"/><path d="M3 21h18"/>' },
   ];
@@ -1758,7 +1756,6 @@ function filiaisDashboardHTML(grp, d){
       <td class="num" style="color:${cor};font-weight:700">${b.rupturaBase!=null?b.rupturaBase.toFixed(1)+'%':'–'}</td>
       <td class="desemp" style="color:${cor}">${n?n.toUpperCase():'–'}</td>
       <td class="num dim">${b.ns!=null?b.ns.toFixed(1)+'%':'–'}</td>
-      <td class="num dim">${b.acuraciaBase!=null?b.acuraciaBase.toFixed(1)+'%':'–'}</td>
       <td class="num dim">${fic?'R$ '+Math.round(fic.valor/1000)+'k':'–'}</td>
       <td class="num" style="color:${corVar}">${fic?(fic.variacao>=0?'+':'')+fic.variacao.toFixed(1)+'%':'–'}</td>
     </tr>`;
@@ -1782,7 +1779,7 @@ function filiaisDashboardHTML(grp, d){
     <div class="tablewrap">
       <div class="scroll">
         <table>
-          <thead><tr><th class="name">Base</th><th>UF</th><th>Ruptura</th><th>Nível</th><th>Atendimento</th><th>Acuracidade</th><th>Valor Estoque (R$)*</th><th>Variação*</th></tr></thead>
+          <thead><tr><th class="name">Base</th><th>UF</th><th>Ruptura</th><th>Nível</th><th>Atendimento</th><th>Valor Estoque (R$)*</th><th>Variação*</th></tr></thead>
           <tbody>${tableRows}</tbody>
         </table>
       </div>
